@@ -246,14 +246,14 @@ def render_dot_html(self, node, code, options, prefix='graphviz',
         if alt is None:
             alt = node.get('alt', self.encode(code).strip())
         imgcss = imgcls and 'class="%s"' % imgcls or ''
-        if 'align' in node:
-            self.body.append('<div align="%s" class="align-%s">' %
-                             (node['align'], node['align']))
         if format == 'svg':
             svgtag = '''<object data="%s" type="image/svg+xml">
             <p class="warning">%s</p></object>\n''' % (fname, alt)
             self.body.append(svgtag)
         else:
+            if 'align' in node:
+                self.body.append('<div align="%s" class="align-%s">' %
+                                 (node['align'], node['align']))
             with open(outfn + '.map', 'rb') as mapfile:
                 imgmap = mapfile.readlines()
             if len(imgmap) == 2:
@@ -266,8 +266,8 @@ def render_dot_html(self, node, code, options, prefix='graphviz',
                 self.body.append('<img src="%s" alt="%s" usemap="#%s" %s/>\n' %
                                  (fname, alt, mapname, imgcss))
                 self.body.extend([item.decode('utf-8') for item in imgmap])
-        if 'align' in node:
-            self.body.append('</div>\n')
+            if 'align' in node:
+                self.body.append('</div>\n')
 
     raise nodes.SkipNode
 
