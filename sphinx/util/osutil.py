@@ -5,26 +5,31 @@
 
     Operating system-related utility functions for Sphinx.
 
-    :copyright: Copyright 2007-2017 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2018 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
+from __future__ import absolute_import
 from __future__ import print_function
 
+import contextlib
+import errno
+import filecmp
+import locale
 import os
 import re
+import shutil
 import sys
 import time
-import errno
-import locale
-import shutil
-import filecmp
-from os import path
-import contextlib
+import warnings
 from io import BytesIO, StringIO
+from os import path
+from typing import TYPE_CHECKING
+
 from six import PY2, PY3, text_type
 
-if False:
-    # For type annotation
+from sphinx.deprecation import RemovedInSphinx30Warning
+
+if TYPE_CHECKING:
     from typing import Any, Iterator, List, Tuple, Union  # NOQA
 
 # Errnos that we need.
@@ -180,8 +185,10 @@ def make_filename(string):
 
 def ustrftime(format, *args):
     # type: (unicode, Any) -> unicode
-    # [DEPRECATED] strftime for unicode strings
-    # It will be removed at Sphinx-1.5
+    """[DEPRECATED] strftime for unicode strings."""
+    warnings.warn('sphinx.util.osutil.ustrtime is deprecated for removal',
+                  RemovedInSphinx30Warning)
+
     if not args:
         # If time is not specified, try to use $SOURCE_DATE_EPOCH variable
         # See https://wiki.debian.org/ReproducibleBuilds/TimestampsProposal
@@ -196,7 +203,7 @@ def ustrftime(format, *args):
         return time.strftime(text_type(format).encode(enc), *args).decode(enc)
     else:  # Py3
         # On Windows, time.strftime() and Unicode characters will raise UnicodeEncodeError.
-        # http://bugs.python.org/issue8304
+        # https://bugs.python.org/issue8304
         try:
             return time.strftime(format, *args)
         except UnicodeEncodeError:
@@ -219,7 +226,12 @@ def abspath(pathdir):
     # type: (unicode) -> unicode
     pathdir = path.abspath(pathdir)
     if isinstance(pathdir, bytes):
-        pathdir = pathdir.decode(fs_encoding)
+        try:
+            pathdir = pathdir.decode(fs_encoding)
+        except UnicodeDecodeError:
+            raise UnicodeDecodeError('multibyte filename not supported on '
+                                     'this filesystem encoding '
+                                     '(%r)' % fs_encoding)
     return pathdir
 
 

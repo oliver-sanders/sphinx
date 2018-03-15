@@ -9,9 +9,15 @@
     :license: BSD, see LICENSE for details.
 """
 
+from typing import TYPE_CHECKING
+
 from sphinx.search import SearchLanguage, parse_stop_word
 
 import snowballstemmer
+
+if TYPE_CHECKING:
+    from typing import Any  # NOQA
+
 
 french_stopwords = parse_stop_word(u'''
 | source: http://snowball.tartarus.org/algorithms/french/stop.txt
@@ -204,7 +210,9 @@ class SearchFrench(SearchLanguage):
     stopwords = french_stopwords
 
     def init(self, options):
+        # type: (Any) -> None
         self.stemmer = snowballstemmer.stemmer('french')
 
     def stem(self, word):
-        return self.stemmer.stemWord(word)
+        # type: (unicode) -> unicode
+        return self.stemmer.stemWord(word.lower())

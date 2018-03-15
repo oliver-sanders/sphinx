@@ -3,9 +3,11 @@
     sphinx.directives.patches
     ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    :copyright: Copyright 2007-2017 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2018 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
+
+from typing import TYPE_CHECKING
 
 from docutils import nodes
 from docutils.parsers.rst import directives
@@ -14,9 +16,8 @@ from docutils.parsers.rst.directives import images, html, tables
 from sphinx import addnodes
 from sphinx.util.nodes import set_source_info
 
-if False:
-    # For type annotation
-    from typing import Dict, List  # NOQA
+if TYPE_CHECKING:
+    from typing import Dict, List, Tuple  # NOQA
     from sphinx.application import Sphinx  # NOQA
 
 
@@ -69,6 +70,7 @@ class RSTTable(tables.RSTTable):
     Only for docutils-0.13 or older version."""
 
     def make_title(self):
+        # type: () -> Tuple[nodes.Node, unicode]
         title, message = tables.RSTTable.make_title(self)
         if title:
             set_source_info(self, title)
@@ -82,6 +84,7 @@ class CSVTable(tables.CSVTable):
     Only for docutils-0.13 or older version."""
 
     def make_title(self):
+        # type: () -> Tuple[nodes.Node, unicode]
         title, message = tables.CSVTable.make_title(self)
         if title:
             set_source_info(self, title)
@@ -95,6 +98,7 @@ class ListTable(tables.ListTable):
     Only for docutils-0.13 or older version."""
 
     def make_title(self):
+        # type: () -> Tuple[nodes.Node, unicode]
         title, message = tables.ListTable.make_title(self)
         if title:
             set_source_info(self, title)

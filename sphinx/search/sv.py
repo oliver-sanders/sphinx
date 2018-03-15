@@ -9,9 +9,14 @@
     :license: BSD, see LICENSE for details.
 """
 
+from typing import TYPE_CHECKING
+
 from sphinx.search import SearchLanguage, parse_stop_word
 
 import snowballstemmer
+
+if TYPE_CHECKING:
+    from typing import Any
 
 swedish_stopwords = parse_stop_word(u'''
 | source: http://snowball.tartarus.org/algorithms/swedish/stop.txt
@@ -145,7 +150,9 @@ class SearchSwedish(SearchLanguage):
     stopwords = swedish_stopwords
 
     def init(self, options):
+        # type: (Any) -> None
         self.stemmer = snowballstemmer.stemmer('swedish')
 
     def stem(self, word):
+        # type: (unicode) -> unicode
         return self.stemmer.stemWord(word)

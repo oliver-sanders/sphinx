@@ -5,14 +5,17 @@
 
     Parallel building utilities.
 
-    :copyright: Copyright 2007-2017 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2018 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
+from __future__ import absolute_import
 
 import os
 import time
 import traceback
 from math import sqrt
+from typing import TYPE_CHECKING
+
 from six import iteritems
 
 try:
@@ -23,8 +26,7 @@ except ImportError:
 from sphinx.errors import SphinxParallelError
 from sphinx.util import logging
 
-if False:
-    # For type annotation
+if TYPE_CHECKING:
     from typing import Any, Callable, Dict, List, Sequence  # NOQA
 
 logger = logging.getLogger(__name__)
@@ -122,6 +124,7 @@ class ParallelTasks(object):
                     logger.handle(log)
                 self._result_funcs.pop(tid)(self._args.pop(tid), result)
                 self._procs[tid].join()
+                self._precvs.pop(tid)
                 self._pworking -= 1
                 break
         else:

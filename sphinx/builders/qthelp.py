@@ -5,29 +5,30 @@
 
     Build input files for the Qt collection generator.
 
-    :copyright: Copyright 2007-2017 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2018 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 
-import os
-import re
 import codecs
+import os
 import posixpath
+import re
 from os import path
-
-from six import text_type
+from typing import TYPE_CHECKING
 
 from docutils import nodes
+from six import text_type
 
 from sphinx import addnodes
 from sphinx.builders.html import StandaloneHTMLBuilder
+from sphinx.config import string_classes
 from sphinx.environment.adapters.indexentries import IndexEntries
+from sphinx.locale import __
 from sphinx.util import force_decode, logging
 from sphinx.util.osutil import make_filename
 from sphinx.util.pycompat import htmlescape
 
-if False:
-    # For type annotation
+if TYPE_CHECKING:
     from typing import Any, Dict, List, Tuple  # NOQA
     from sphinx.application import Sphinx  # NOQA
 
@@ -107,6 +108,11 @@ class QtHelpBuilder(StandaloneHTMLBuilder):
     Builder that also outputs Qt help project, contents and index files.
     """
     name = 'qthelp'
+    epilog = __('You can now run "qcollectiongenerator" with the .qhcp '
+                'project file in %(outdir)s, like this:\n'
+                '$ qcollectiongenerator %(outdir)s/%(project)s.qhcp\n'
+                'To view the help file:\n'
+                '$ assistant -collectionFile %(outdir)s/%(project)s.qhc')
 
     # don't copy the reST source
     copysource = False
@@ -142,7 +148,7 @@ class QtHelpBuilder(StandaloneHTMLBuilder):
 
     def build_qhp(self, outdir, outname):
         # type: (unicode, unicode) -> None
-        logger.info('writing project file...')
+        logger.info(__('writing project file...'))
 
         # sections
         tocdoc = self.env.get_and_resolve_doctree(self.config.master_doc, self,
@@ -199,7 +205,11 @@ class QtHelpBuilder(StandaloneHTMLBuilder):
         # it seems that the "namespace" may not contain non-alphanumeric
         # characters, and more than one successive dot, or leading/trailing
         # dots, are also forbidden
-        nspace = 'org.sphinx.%s.%s' % (outname, self.config.version)
+        if self.config.qthelp_namespace:
+            nspace = self.config.qthelp_namespace
+        else:
+            nspace = 'org.sphinx.%s.%s' % (outname, self.config.version)
+
         nspace = re.sub('[^a-zA-Z0-9.]', '', nspace)
         nspace = re.sub(r'\.+', '.', nspace).strip('.')
         nspace = nspace.lower()
@@ -221,7 +231,7 @@ class QtHelpBuilder(StandaloneHTMLBuilder):
             nspace, 'doc', self.get_target_uri(self.config.master_doc))
         startpage = 'qthelp://' + posixpath.join(nspace, 'doc', 'index.html')
 
-        logger.info('writing collection project file...')
+        logger.info(__('writing collection project file...'))
         with codecs.open(path.join(outdir, outname + '.qhcp'), 'w', 'utf-8') as f:  # type: ignore  # NOQA
             f.write(collection_template % {
                 'outname': htmlescape(outname),
@@ -264,7 +274,7 @@ class QtHelpBuilder(StandaloneHTMLBuilder):
             link = node['refuri']
             title = htmlescape(node.astext()).replace('"', '&quot;')
             item = section_template % {'title': title, 'ref': link}
-            item = u' ' * 4 * indentlevel + item  # type: ignore
+            item = u' ' * 4 * indentlevel + item
             parts.append(item.encode('ascii', 'xmlcharrefreplace'))
         elif isinstance(node, nodes.bullet_list):
             for subnode in node:
@@ -328,6 +338,7 @@ def setup(app):
     app.add_builder(QtHelpBuilder)
 
     app.add_config_value('qthelp_basename', lambda self: make_filename(self.project), None)
+    app.add_config_value('qthelp_namespace', None, 'html', string_classes)
     app.add_config_value('qthelp_theme', 'nonav', 'html')
     app.add_config_value('qthelp_theme_options', {}, 'html')
 

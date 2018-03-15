@@ -5,34 +5,34 @@
 
     Render math in HTML via dvipng or dvisvgm.
 
-    :copyright: Copyright 2007-2017 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2018 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 
-import re
 import codecs
+import posixpath
+import re
 import shutil
 import tempfile
-import posixpath
+from hashlib import sha1
 from os import path
 from subprocess import Popen, PIPE
-from hashlib import sha1
-
-from six import text_type
+from typing import TYPE_CHECKING
 
 from docutils import nodes
+from six import text_type
 
 import sphinx
-from sphinx.locale import _
 from sphinx.errors import SphinxError, ExtensionError
-from sphinx.util import logging
-from sphinx.util.png import read_png_depth, write_png_depth
-from sphinx.util.osutil import ensuredir, ENOENT, cd
-from sphinx.util.pycompat import sys_encoding
+from sphinx.ext.mathbase import get_node_equation_number
 from sphinx.ext.mathbase import setup_math as mathbase_setup, wrap_displaymath
+from sphinx.locale import _, __
+from sphinx.util import logging
+from sphinx.util.osutil import ensuredir, ENOENT, cd
+from sphinx.util.png import read_png_depth, write_png_depth
+from sphinx.util.pycompat import sys_encoding
 
-if False:
-    # For type annotation
+if TYPE_CHECKING:
     from typing import Any, Dict, List, Tuple  # NOQA
     from sphinx.application import Sphinx  # NOQA
     from sphinx.builders import Builder  # NOQA
@@ -141,8 +141,8 @@ def compile_math(latex, builder):
         except OSError as err:
             if err.errno != ENOENT:   # No such file or directory
                 raise
-            logger.warning('LaTeX command %r cannot be run (needed for math '
-                           'display), check the imgmath_latex setting',
+            logger.warning(__('LaTeX command %r cannot be run (needed for math '
+                              'display), check the imgmath_latex setting'),
                            builder.config.imgmath_latex)
             raise InvokeError
 
@@ -161,8 +161,8 @@ def convert_dvi_to_image(command, name):
     except OSError as err:
         if err.errno != ENOENT:   # No such file or directory
             raise
-        logger.warning('%s command %r cannot be run (needed for math '
-                       'display), check the imgmath_%s setting',
+        logger.warning(__('%s command %r cannot be run (needed for math '
+                          'display), check the imgmath_%s setting'),
                        name, command[0], name)
         raise InvokeError
 
@@ -300,7 +300,7 @@ def html_visit_math(self, node):
         sm = nodes.system_message(msg, type='WARNING', level=2,
                                   backrefs=[], source=node['latex'])
         sm.walkabout(self)
-        logger.warning('display latex %r: %s', node['latex'], msg)
+        logger.warning(__('display latex %r: %s'), node['latex'], msg)
         raise nodes.SkipNode
     if fname is None:
         # something failed -- use text-only as a bad substitute
@@ -328,12 +328,13 @@ def html_visit_displaymath(self, node):
         sm = nodes.system_message(msg, type='WARNING', level=2,
                                   backrefs=[], source=node['latex'])
         sm.walkabout(self)
-        logger.warning('inline latex %r: %s', node['latex'], msg)
+        logger.warning(__('inline latex %r: %s'), node['latex'], msg)
         raise nodes.SkipNode
     self.body.append(self.starttag(node, 'div', CLASS='math'))
     self.body.append('<p>')
     if node['number']:
-        self.body.append('<span class="eqno">(%s)' % node['number'])
+        number = get_node_equation_number(self, node)
+        self.body.append('<span class="eqno">(%s)' % number)
         self.add_permalink_ref(node, _('Permalink to this equation'))
         self.body.append('</span>')
     if fname is None:

@@ -9,9 +9,15 @@
     :license: BSD, see LICENSE for details.
 """
 
+from typing import TYPE_CHECKING
+
 from sphinx.search import SearchLanguage, parse_stop_word
 
 import snowballstemmer
+
+if TYPE_CHECKING:
+    from typing import Any  # NOQA
+
 
 finnish_stopwords = parse_stop_word(u'''
 | source: http://snowball.tartarus.org/algorithms/finnish/stop.txt
@@ -118,7 +124,9 @@ class SearchFinnish(SearchLanguage):
     stopwords = finnish_stopwords
 
     def init(self, options):
+        # type: (Any) -> None
         self.stemmer = snowballstemmer.stemmer('finnish')
 
     def stem(self, word):
+        # type: (unicode) -> unicode
         return self.stemmer.stemWord(word)

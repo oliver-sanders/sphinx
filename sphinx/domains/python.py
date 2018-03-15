@@ -5,28 +5,28 @@
 
     The Python domain.
 
-    :copyright: Copyright 2007-2017 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2018 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 
 import re
-
-from six import iteritems
+from typing import TYPE_CHECKING
 
 from docutils import nodes
 from docutils.parsers.rst import Directive, directives
+from six import iteritems
 
-from sphinx import addnodes
-from sphinx.roles import XRefRole
-from sphinx.locale import l_, _
-from sphinx.domains import Domain, ObjType, Index
+from sphinx import addnodes, locale
+from sphinx.deprecation import DeprecatedDict, RemovedInSphinx30Warning
 from sphinx.directives import ObjectDescription
+from sphinx.domains import Domain, ObjType, Index
+from sphinx.locale import _, __
+from sphinx.roles import XRefRole
 from sphinx.util import logging
-from sphinx.util.nodes import make_refnode
 from sphinx.util.docfields import Field, GroupedField, TypedField
+from sphinx.util.nodes import make_refnode
 
-if False:
-    # For type annotation
+if TYPE_CHECKING:
     from typing import Any, Dict, Iterable, Iterator, List, Tuple, Union  # NOQA
     from sphinx.application import Sphinx  # NOQA
     from sphinx.builders import Builder  # NOQA
@@ -39,10 +39,28 @@ logger = logging.getLogger(__name__)
 py_sig_re = re.compile(
     r'''^ ([\w.]*\.)?            # class name(s)
           (\w+)  \s*             # thing name
-          (?: \((.*)\)           # optional: arguments
+          (?: \(\s*(.*)\s*\)     # optional: arguments
            (?:\s* -> \s* (.*))?  #           return annotation
           )? $                   # and nothing more
           ''', re.VERBOSE)
+
+
+pairindextypes = {
+    'module':    _('module'),
+    'keyword':   _('keyword'),
+    'operator':  _('operator'),
+    'object':    _('object'),
+    'exception': _('exception'),
+    'statement': _('statement'),
+    'builtin':   _('built-in function'),
+}  # Dict[unicode, unicode]
+
+locale.pairindextypes = DeprecatedDict(
+    pairindextypes,
+    'sphinx.locale.pairindextypes is deprecated. '
+    'Please use sphinx.domains.python.pairindextypes instead.',
+    RemovedInSphinx30Warning
+)
 
 
 def _pseudo_parse_arglist(signode, arglist):
@@ -174,21 +192,21 @@ class PyObject(ObjectDescription):
     }
 
     doc_field_types = [
-        PyTypedField('parameter', label=l_('Parameters'),
+        PyTypedField('parameter', label=_('Parameters'),
                      names=('param', 'parameter', 'arg', 'argument',
                             'keyword', 'kwarg', 'kwparam'),
                      typerolename='class', typenames=('paramtype', 'type'),
                      can_collapse=True),
-        PyTypedField('variable', label=l_('Variables'), rolename='obj',
+        PyTypedField('variable', label=_('Variables'), rolename='obj',
                      names=('var', 'ivar', 'cvar'),
                      typerolename='class', typenames=('vartype',),
                      can_collapse=True),
-        PyGroupedField('exceptions', label=l_('Raises'), rolename='exc',
+        PyGroupedField('exceptions', label=_('Raises'), rolename='exc',
                        names=('raises', 'raise', 'exception', 'except'),
                        can_collapse=True),
-        Field('returnvalue', label=l_('Returns'), has_arg=False,
+        Field('returnvalue', label=_('Returns'), has_arg=False,
               names=('returns', 'return')),
-        PyField('returntype', label=l_('Return type'), has_arg=False,
+        PyField('returntype', label=_('Return type'), has_arg=False,
                 names=('rtype',), bodyrolename='class'),
     ]
 
@@ -348,6 +366,10 @@ class PyObject(ObjectDescription):
             if self.allow_nesting:
                 classes = self.env.ref_context.setdefault('py:classes', [])
                 classes.append(prefix)
+        if 'module' in self.options:
+            modules = self.env.ref_context.setdefault('py:modules', [])
+            modules.append(self.env.ref_context.get('py:module'))
+            self.env.ref_context['py:module'] = self.options['module']
 
     def after_content(self):
         # type: () -> None
@@ -368,6 +390,12 @@ class PyObject(ObjectDescription):
                 pass
         self.env.ref_context['py:class'] = (classes[-1] if len(classes) > 0
                                             else None)
+        if 'module' in self.options:
+            modules = self.env.ref_context.setdefault('py:modules', [])
+            if modules:
+                self.env.ref_context['py:module'] = modules.pop()
+            else:
+                self.env.ref_context.pop('py:module')
 
 
 class PyModulelevel(PyObject):
@@ -622,8 +650,8 @@ class PythonModuleIndex(Index):
     """
 
     name = 'modindex'
-    localname = l_('Python Module Index')
-    shortname = l_('modules')
+    localname = _('Python Module Index')
+    shortname = _('modules')
 
     def generate(self, docnames=None):
         # type: (Iterable[unicode]) -> Tuple[List[Tuple[unicode, List[List[Union[unicode, int]]]]], bool]  # NOQA
@@ -693,15 +721,15 @@ class PythonDomain(Domain):
     name = 'py'
     label = 'Python'
     object_types = {
-        'function':     ObjType(l_('function'),      'func', 'obj'),
-        'data':         ObjType(l_('data'),          'data', 'obj'),
-        'class':        ObjType(l_('class'),         'class', 'exc', 'obj'),
-        'exception':    ObjType(l_('exception'),     'exc', 'class', 'obj'),
-        'method':       ObjType(l_('method'),        'meth', 'obj'),
-        'classmethod':  ObjType(l_('class method'),  'meth', 'obj'),
-        'staticmethod': ObjType(l_('static method'), 'meth', 'obj'),
-        'attribute':    ObjType(l_('attribute'),     'attr', 'obj'),
-        'module':       ObjType(l_('module'),        'mod', 'obj'),
+        'function':     ObjType(_('function'),      'func', 'obj'),
+        'data':         ObjType(_('data'),          'data', 'obj'),
+        'class':        ObjType(_('class'),         'class', 'exc', 'obj'),
+        'exception':    ObjType(_('exception'),     'exc', 'class', 'obj'),
+        'method':       ObjType(_('method'),        'meth', 'obj'),
+        'classmethod':  ObjType(_('class method'),  'meth', 'obj'),
+        'staticmethod': ObjType(_('static method'), 'meth', 'obj'),
+        'attribute':    ObjType(_('attribute'),     'attr', 'obj'),
+        'module':       ObjType(_('module'),        'mod', 'obj'),
     }  # type: Dict[unicode, ObjType]
 
     directives = {
@@ -831,7 +859,7 @@ class PythonDomain(Domain):
         if not matches:
             return None
         elif len(matches) > 1:
-            logger.warning('more than one target found for cross-reference %r: %s',
+            logger.warning(__('more than one target found for cross-reference %r: %s'),
                            target, ', '.join(match[0] for match in matches),
                            type='ref', subtype='python', location=node)
         name, obj = matches[0]
@@ -902,6 +930,7 @@ def setup(app):
 
     return {
         'version': 'builtin',
+        'env_version': 1,
         'parallel_read_safe': True,
         'parallel_write_safe': True,
     }

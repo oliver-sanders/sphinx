@@ -5,29 +5,29 @@
 
     The standard domain.
 
-    :copyright: Copyright 2007-2017 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2018 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 
 import re
 import unicodedata
-
-from six import iteritems
+from copy import copy
+from typing import TYPE_CHECKING
 
 from docutils import nodes
 from docutils.parsers.rst import Directive, directives
 from docutils.statemachine import ViewList
+from six import iteritems
 
 from sphinx import addnodes
-from sphinx.roles import XRefRole
-from sphinx.locale import l_, _
-from sphinx.domains import Domain, ObjType
 from sphinx.directives import ObjectDescription
+from sphinx.domains import Domain, ObjType
+from sphinx.locale import _, __
+from sphinx.roles import XRefRole
 from sphinx.util import ws_re, logging, docname_join
 from sphinx.util.nodes import clean_astext, make_refnode
 
-if False:
-    # For type annotation
+if TYPE_CHECKING:
     from typing import Any, Callable, Dict, Iterator, List, Tuple, Type, Union  # NOQA
     from sphinx.application import Sphinx  # NOQA
     from sphinx.builders import Builder  # NOQA
@@ -81,7 +81,7 @@ class GenericObject(ObjectDescription):
 
 
 class EnvVar(GenericObject):
-    indextemplate = l_('environment variable; %s')
+    indextemplate = _('environment variable; %s')
 
 
 class EnvVarXRefRole(XRefRole):
@@ -158,9 +158,9 @@ class Cmdoption(ObjectDescription):
             potential_option = potential_option.strip()
             m = option_desc_re.match(potential_option)  # type: ignore
             if not m:
-                logger.warning('Malformed option description %r, should '
-                               'look like "opt", "-opt args", "--opt args", '
-                               '"/opt args" or "+opt args"', potential_option,
+                logger.warning(__('Malformed option description %r, should '
+                                  'look like "opt", "-opt args", "--opt args", '
+                                  '"/opt args" or "+opt args"'), potential_option,
                                location=(self.env.docname, self.lineno))
                 continue
             optname, args = m.groups()
@@ -452,13 +452,13 @@ class StandardDomain(Domain):
     label = 'Default'
 
     object_types = {
-        'term': ObjType(l_('glossary term'), 'term', searchprio=-1),
-        'token': ObjType(l_('grammar token'), 'token', searchprio=-1),
-        'label': ObjType(l_('reference label'), 'ref', 'keyword',
+        'term': ObjType(_('glossary term'), 'term', searchprio=-1),
+        'token': ObjType(_('grammar token'), 'token', searchprio=-1),
+        'label': ObjType(_('reference label'), 'ref', 'keyword',
                          searchprio=-1),
-        'envvar': ObjType(l_('environment variable'), 'envvar'),
-        'cmdoption': ObjType(l_('program option'), 'option'),
-        'doc': ObjType(l_('document'), 'doc', searchprio=-1)
+        'envvar': ObjType(_('environment variable'), 'envvar'),
+        'cmdoption': ObjType(_('program option'), 'option'),
+        'doc': ObjType(_('document'), 'doc', searchprio=-1)
     }  # type: Dict[unicode, ObjType]
 
     directives = {
@@ -495,9 +495,9 @@ class StandardDomain(Domain):
         'citations': {},        # citation_name -> docname, labelid, lineno
         'citation_refs': {},    # citation_name -> list of docnames
         'labels': {             # labelname -> docname, labelid, sectionname
-            'genindex': ('genindex', '', l_('Index')),
-            'modindex': ('py-modindex', '', l_('Module Index')),
-            'search':   ('search', '', l_('Search Page')),
+            'genindex': ('genindex', '', _('Index')),
+            'modindex': ('py-modindex', '', _('Module Index')),
+            'search':   ('search', '', _('Search Page')),
         },
         'anonlabels': {         # labelname -> docname, labelid
             'genindex': ('genindex', ''),
@@ -522,6 +522,15 @@ class StandardDomain(Domain):
         nodes.table: ('table', None),
         nodes.container: ('code-block', None),
     }  # type: Dict[nodes.Node, Tuple[unicode, Callable]]
+
+    def __init__(self, env):
+        # type: (BuildEnvironment) -> None
+        super(StandardDomain, self).__init__(env)
+
+        # set up enumerable nodes
+        self.enumerable_nodes = copy(self.enumerable_nodes)  # create a copy for this instance
+        for node, settings in iteritems(env.app.registry.enumerable_nodes):
+            self.enumerable_nodes[node] = settings
 
     def clear_doc(self, docname):
         # type: (unicode) -> None
@@ -582,7 +591,7 @@ class StandardDomain(Domain):
             label = node[0].astext()
             if label in self.data['citations']:
                 path = env.doc2path(self.data['citations'][label][0])
-                logger.warning('duplicate citation %s, other instance in %s', label, path,
+                logger.warning(__('duplicate citation %s, other instance in %s'), label, path,
                                location=node, type='ref', subtype='citation')
             self.data['citations'][label] = (docname, node['ids'][0], node.line)
 
@@ -607,14 +616,15 @@ class StandardDomain(Domain):
             if node.tagname == 'target' and 'refid' in node:  # indirect hyperlink targets
                 node = document.ids.get(node['refid'])
                 labelid = node['names'][0]
-            if name.isdigit() or 'refuri' in node or \
-               node.tagname.startswith('desc_'):
+            if (node.tagname == 'footnote' or
+                    'refuri' in node or
+                    node.tagname.startswith('desc_')):
                 # ignore footnote labels, labels automatically generated from a
                 # link and object descriptions
                 continue
             if name in labels:
-                logger.warning('duplicate label %s, ' % name + 'other instance '
-                               'in ' + env.doc2path(labels[name][0]),
+                logger.warning(__('duplicate label %s, other instance in %s'),
+                               name, env.doc2path(labels[name][0]),
                                location=node)
             anonlabels[name] = docname, labelid
             if node.tagname in ('section', 'rubric'):
@@ -638,7 +648,7 @@ class StandardDomain(Domain):
         # type: () -> None
         for name, (docname, labelid, lineno) in iteritems(self.data['citations']):
             if name not in self.data['citation_refs']:
-                logger.warning('Citation [%s] is not referenced.', name,
+                logger.warning(__('Citation [%s] is not referenced.'), name,
                                type='ref', subtype='citation',
                                location=(docname, lineno))
 
@@ -715,21 +725,21 @@ class StandardDomain(Domain):
         if not docname:
             return None
 
-        if env.config.numfig is False:
-            logger.warning('numfig is disabled. :numref: is ignored.', location=node)
-            return contnode
-
         target_node = env.get_doctree(docname).ids.get(labelid)
         figtype = self.get_figtype(target_node)
         if figtype is None:
             return None
+
+        if figtype != 'section' and env.config.numfig is False:
+            logger.warning(__('numfig is disabled. :numref: is ignored.'), location=node)
+            return contnode
 
         try:
             fignumber = self.get_fignumber(env, builder, figtype, docname, target_node)
             if fignumber is None:
                 return contnode
         except ValueError:
-            logger.warning("no number is assigned for %s: %s", figtype, labelid,
+            logger.warning(__("no number is assigned for %s: %s"), figtype, labelid,
                            location=node)
             return contnode
 
@@ -740,7 +750,7 @@ class StandardDomain(Domain):
                 title = env.config.numfig_format.get(figtype, '')
 
             if figname is None and '{name}' in title:
-                logger.warning('the link has no caption: %s', title, location=node)
+                logger.warning(__('the link has no caption: %s'), title, location=node)
                 return contnode
             else:
                 fignum = '.'.join(map(str, fignumber))
@@ -754,10 +764,10 @@ class StandardDomain(Domain):
                     # old style format (cf. "Fig.%s")
                     newtitle = title % fignum
         except KeyError as exc:
-            logger.warning('invalid numfig_format: %s (%r)', title, exc, location=node)
+            logger.warning(__('invalid numfig_format: %s (%r)'), title, exc, location=node)
             return contnode
         except TypeError:
-            logger.warning('invalid numfig_format: %s', title, location=node)
+            logger.warning(__('invalid numfig_format: %s'), title, location=node)
             return contnode
 
         return self.build_reference_node(fromdocname, builder,
@@ -959,12 +969,18 @@ class StandardDomain(Domain):
 
     def get_full_qualified_name(self, node):
         # type: (nodes.Node) -> unicode
-        progname = node.get('std:program')
-        target = node.get('reftarget')
-        if progname is None or target is None:
-            return None
+        if node.get('reftype') == 'option':
+            progname = node.get('std:program')
+            command = ws_re.split(node.get('reftarget'))
+            if progname:
+                command.insert(0, progname)
+            option = command.pop()
+            if command:
+                return '.'.join(['-'.join(command), option])
+            else:
+                return None
         else:
-            return '.'.join([progname, target])
+            return None
 
 
 def setup(app):
@@ -973,6 +989,7 @@ def setup(app):
 
     return {
         'version': 'builtin',
+        'env_version': 1,
         'parallel_read_safe': True,
         'parallel_write_safe': True,
     }

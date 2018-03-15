@@ -5,16 +5,19 @@
 
     Index entries collector for sphinx.environment.
 
-    :copyright: Copyright 2007-2017 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2018 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 
-from sphinx import addnodes
-from sphinx.util import split_index_msg, logging
-from sphinx.environment.collectors import EnvironmentCollector
+from typing import TYPE_CHECKING
 
-if False:
-    # For type annotation
+from six import text_type
+
+from sphinx import addnodes
+from sphinx.environment.collectors import EnvironmentCollector
+from sphinx.util import split_index_msg, logging
+
+if TYPE_CHECKING:
     from typing import Dict, Set  # NOQA
     from docutils import nodes  # NOQA
     from sphinx.applicatin import Sphinx  # NOQA
@@ -44,7 +47,7 @@ class IndexEntriesCollector(EnvironmentCollector):
                 for entry in node['entries']:
                     split_index_msg(entry[0], entry[1])
             except ValueError as exc:
-                logger.warning(str(exc), location=node)
+                logger.warning(text_type(exc), location=node)
                 node.parent.remove(node)
             else:
                 for entry in node['entries']:

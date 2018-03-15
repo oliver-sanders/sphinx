@@ -9,11 +9,12 @@
     :license: BSD, see LICENSE for details.
 """
 
+from typing import TYPE_CHECKING
 
 from sphinx.builders import Builder
+from sphinx.locale import __
 
-if False:
-    # For type annotation
+if TYPE_CHECKING:
     from typing import Any, Dict, Set  # NOQA
     from docutils import nodes  # NOQA
     from sphinx.application import Sphinx  # NOQA
@@ -21,6 +22,8 @@ if False:
 
 class DummyBuilder(Builder):
     name = 'dummy'
+    epilog = __('The dummy builder generates no files.')
+
     allow_parallel = True
 
     def init(self):

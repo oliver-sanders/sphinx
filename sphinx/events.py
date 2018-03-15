@@ -7,26 +7,27 @@
 
     Gracefully adapted from the TextPress system by Armin.
 
-    :copyright: Copyright 2007-2017 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2018 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 from __future__ import print_function
 
 from collections import OrderedDict, defaultdict
+from typing import TYPE_CHECKING
 
 from six import itervalues
 
 from sphinx.errors import ExtensionError
 from sphinx.locale import __
 
-if False:
-    # For type annotation
+if TYPE_CHECKING:
     from typing import Any, Callable, Dict, List  # NOQA
 
 
 # List of all known core events. Maps name to arguments description.
 core_events = {
     'builder-inited': '',
+    'config-inited': 'config',
     'env-get-outdated': 'env, added, changed, removed',
     'env-get-updated': 'env',
     'env-purge-doc': 'env, docname',

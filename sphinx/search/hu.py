@@ -9,9 +9,15 @@
     :license: BSD, see LICENSE for details.
 """
 
+from typing import TYPE_CHECKING
+
 from sphinx.search import SearchLanguage, parse_stop_word
 
 import snowballstemmer
+
+if TYPE_CHECKING:
+    from typing import Any  # NOQA
+
 
 hungarian_stopwords = parse_stop_word(u'''
 | source: http://snowball.tartarus.org/algorithms/hungarian/stop.txt
@@ -232,7 +238,9 @@ class SearchHungarian(SearchLanguage):
     stopwords = hungarian_stopwords
 
     def init(self, options):
+        # type: (Any) -> None
         self.stemmer = snowballstemmer.stemmer('hungarian')
 
     def stem(self, word):
+        # type: (unicode) -> unicode
         return self.stemmer.stemWord(word)

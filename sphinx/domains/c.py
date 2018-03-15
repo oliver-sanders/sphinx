@@ -5,25 +5,25 @@
 
     The C language domain.
 
-    :copyright: Copyright 2007-2017 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2018 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 
 import re
 import string
+from typing import TYPE_CHECKING
 
 from docutils import nodes
 
 from sphinx import addnodes
-from sphinx.roles import XRefRole
-from sphinx.locale import l_, _
-from sphinx.domains import Domain, ObjType
 from sphinx.directives import ObjectDescription
-from sphinx.util.nodes import make_refnode
+from sphinx.domains import Domain, ObjType
+from sphinx.locale import _
+from sphinx.roles import XRefRole
 from sphinx.util.docfields import Field, TypedField
+from sphinx.util.nodes import make_refnode
 
-if False:
-    # For type annotation
+if TYPE_CHECKING:
     from typing import Any, Dict, Iterator, List, Tuple  # NOQA
     from sphinx.application import Sphinx  # NOQA
     from sphinx.builders import Builder  # NOQA
@@ -62,12 +62,12 @@ class CObject(ObjectDescription):
     """
 
     doc_field_types = [
-        TypedField('parameter', label=l_('Parameters'),
+        TypedField('parameter', label=_('Parameters'),
                    names=('param', 'parameter', 'arg', 'argument'),
                    typerolename='type', typenames=('type',)),
-        Field('returnvalue', label=l_('Returns'), has_arg=False,
+        Field('returnvalue', label=_('Returns'), has_arg=False,
               names=('returns', 'return')),
-        Field('returntype', label=l_('Return type'), has_arg=False,
+        Field('returntype', label=_('Return type'), has_arg=False,
               names=('rtype',)),
     ]
 
@@ -254,11 +254,11 @@ class CDomain(Domain):
     name = 'c'
     label = 'C'
     object_types = {
-        'function': ObjType(l_('function'), 'func'),
-        'member':   ObjType(l_('member'),   'member'),
-        'macro':    ObjType(l_('macro'),    'macro'),
-        'type':     ObjType(l_('type'),     'type'),
-        'var':      ObjType(l_('variable'), 'data'),
+        'function': ObjType(_('function'), 'func'),
+        'member':   ObjType(_('member'),   'member'),
+        'macro':    ObjType(_('macro'),    'macro'),
+        'type':     ObjType(_('type'),     'type'),
+        'var':      ObjType(_('variable'), 'data'),
     }
 
     directives = {
@@ -330,6 +330,7 @@ def setup(app):
 
     return {
         'version': 'builtin',
+        'env_version': 1,
         'parallel_read_safe': True,
         'parallel_write_safe': True,
     }

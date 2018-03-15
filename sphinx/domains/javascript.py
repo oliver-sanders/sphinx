@@ -5,24 +5,25 @@
 
     The JavaScript domain.
 
-    :copyright: Copyright 2007-2017 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2018 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
+
+from typing import TYPE_CHECKING
 
 from docutils import nodes
 from docutils.parsers.rst import Directive, directives
 
 from sphinx import addnodes
-from sphinx.domains import Domain, ObjType
-from sphinx.locale import l_, _
 from sphinx.directives import ObjectDescription
-from sphinx.roles import XRefRole
+from sphinx.domains import Domain, ObjType
 from sphinx.domains.python import _pseudo_parse_arglist
-from sphinx.util.nodes import make_refnode
+from sphinx.locale import _
+from sphinx.roles import XRefRole
 from sphinx.util.docfields import Field, GroupedField, TypedField
+from sphinx.util.nodes import make_refnode
 
-if False:
-    # For type annotation
+if TYPE_CHECKING:
     from typing import Any, Dict, Iterator, List, Tuple  # NOQA
     from docutils import nodes  # NOQA
     from sphinx.application import Sphinx  # NOQA
@@ -201,15 +202,15 @@ class JSCallable(JSObject):
     has_arguments = True
 
     doc_field_types = [
-        TypedField('arguments', label=l_('Arguments'),
+        TypedField('arguments', label=_('Arguments'),
                    names=('argument', 'arg', 'parameter', 'param'),
                    typerolename='func', typenames=('paramtype', 'type')),
-        GroupedField('errors', label=l_('Throws'), rolename='err',
+        GroupedField('errors', label=_('Throws'), rolename='err',
                      names=('throws', ),
                      can_collapse=True),
-        Field('returnvalue', label=l_('Returns'), has_arg=False,
+        Field('returnvalue', label=_('Returns'), has_arg=False,
               names=('returns', 'return')),
-        Field('returntype', label=l_('Return type'), has_arg=False,
+        Field('returntype', label=_('Return type'), has_arg=False,
               names=('rtype',)),
     ]
 
@@ -296,12 +297,12 @@ class JavaScriptDomain(Domain):
     label = 'JavaScript'
     # if you add a new object type make sure to edit JSObject.get_index_string
     object_types = {
-        'function':  ObjType(l_('function'),  'func'),
-        'method':    ObjType(l_('method'),    'meth'),
-        'class':     ObjType(l_('class'),     'class'),
-        'data':      ObjType(l_('data'),      'data'),
-        'attribute': ObjType(l_('attribute'), 'attr'),
-        'module':    ObjType(l_('module'),    'mod'),
+        'function':  ObjType(_('function'),  'func'),
+        'method':    ObjType(_('method'),    'meth'),
+        'class':     ObjType(_('class'),     'class'),
+        'data':      ObjType(_('data'),      'data'),
+        'attribute': ObjType(_('attribute'), 'attr'),
+        'module':    ObjType(_('module'),    'mod'),
     }
     directives = {
         'function':  JSCallable,
@@ -415,6 +416,7 @@ def setup(app):
 
     return {
         'version': 'builtin',
+        'env_version': 1,
         'parallel_read_safe': True,
         'parallel_write_safe': True,
     }

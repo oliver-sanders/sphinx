@@ -9,9 +9,15 @@
     :license: BSD, see LICENSE for details.
 """
 
+from typing import TYPE_CHECKING
+
 from sphinx.search import SearchLanguage, parse_stop_word
 
 import snowballstemmer
+
+if TYPE_CHECKING:
+    from typing import Any  # NOQA
+
 
 german_stopwords = parse_stop_word(u'''
 |source: http://snowball.tartarus.org/algorithms/german/stop.txt
@@ -308,7 +314,9 @@ class SearchGerman(SearchLanguage):
     stopwords = german_stopwords
 
     def init(self, options):
+        # type: (Any) -> None
         self.stemmer = snowballstemmer.stemmer('german')
 
     def stem(self, word):
+        # type: (unicode) -> unicode
         return self.stemmer.stemWord(word)

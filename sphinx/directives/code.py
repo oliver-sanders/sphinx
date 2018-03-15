@@ -3,17 +3,19 @@
     sphinx.directives.code
     ~~~~~~~~~~~~~~~~~~~~~~
 
-    :copyright: Copyright 2007-2017 by the Sphinx team, see AUTHORS.
+    :copyright: Copyright 2007-2018 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
 
-import sys
 import codecs
+import sys
 from difflib import unified_diff
+from typing import TYPE_CHECKING
 
 from docutils import nodes
 from docutils.parsers.rst import Directive, directives
 from docutils.statemachine import ViewList
+from six import text_type
 
 from sphinx import addnodes
 from sphinx.locale import __
@@ -21,8 +23,7 @@ from sphinx.util import logging
 from sphinx.util import parselinenos
 from sphinx.util.nodes import set_source_info
 
-if False:
-    # For type annotation
+if TYPE_CHECKING:
     from typing import Any, Dict, List, Tuple  # NOQA
     from sphinx.application import Sphinx  # NOQA
     from sphinx.config import Config  # NOQA
@@ -126,7 +127,7 @@ class CodeBlock(Directive):
                 nlines = len(self.content)
                 hl_lines = parselinenos(linespec, nlines)
                 if any(i >= nlines for i in hl_lines):
-                    logger.warning('line number spec is out of range(1-%d): %r' %
+                    logger.warning(__('line number spec is out of range(1-%d): %r') %
                                    (nlines, self.options['emphasize-lines']),
                                    location=location)
 
@@ -159,7 +160,7 @@ class CodeBlock(Directive):
             try:
                 literal = container_wrapper(self, literal, caption)
             except ValueError as exc:
-                return [document.reporter.warning(str(exc), line=self.lineno)]
+                return [document.reporter.warning(text_type(exc), line=self.lineno)]
 
         # literal will be note_implicit_target that is linked from caption and numref.
         # when options['name'] is provided, it should be primary ID.
@@ -268,7 +269,7 @@ class LiteralIncludeReader(object):
         if linespec:
             linelist = parselinenos(linespec, len(lines))
             if any(i >= len(lines) for i in linelist):
-                logger.warning('line number spec is out of range(1-%d): %r' %
+                logger.warning(__('line number spec is out of range(1-%d): %r') %
                                (len(lines), linespec), location=location)
 
             if 'lineno-match' in self.options:
@@ -364,6 +365,7 @@ class LiteralIncludeReader(object):
         return lines
 
     def dedent_filter(self, lines, location=None):
+        # type: (List[unicode], Any) -> List[unicode]
         if 'dedent' in self.options:
             return dedent_lines(lines, self.options.get('dedent'), location=location)
         else:
@@ -439,7 +441,7 @@ class LiteralInclude(Directive):
             if 'emphasize-lines' in self.options:
                 hl_lines = parselinenos(self.options['emphasize-lines'], lines)
                 if any(i >= lines for i in hl_lines):
-                    logger.warning('line number spec is out of range(1-%d): %r' %
+                    logger.warning(__('line number spec is out of range(1-%d): %r') %
                                    (lines, self.options['emphasize-lines']),
                                    location=location)
                 extra_args['hl_lines'] = [x + 1 for x in hl_lines if x < lines]
@@ -455,7 +457,7 @@ class LiteralInclude(Directive):
 
             return [retnode]
         except Exception as exc:
-            return [document.reporter.warning(str(exc), line=self.lineno)]
+            return [document.reporter.warning(text_type(exc), line=self.lineno)]
 
 
 def setup(app):
