@@ -58,12 +58,10 @@ import os
 import posixpath
 import re
 import sys
-import warnings
 from types import ModuleType
-from typing import TYPE_CHECKING
 
 from docutils import nodes
-from docutils.parsers.rst import Directive, directives
+from docutils.parsers.rst import directives
 from docutils.parsers.rst.states import RSTStateMachine, state_classes
 from docutils.statemachine import ViewList
 from six import string_types
@@ -71,7 +69,6 @@ from six import text_type
 
 import sphinx
 from sphinx import addnodes
-from sphinx.deprecation import RemovedInSphinx20Warning
 from sphinx.environment.adapters.toctree import TocTree
 from sphinx.ext.autodoc import get_documenters
 from sphinx.ext.autodoc.directive import DocumenterBridge, Options
@@ -79,9 +76,13 @@ from sphinx.ext.autodoc.importer import import_module
 from sphinx.locale import __
 from sphinx.pycode import ModuleAnalyzer, PycodeError
 from sphinx.util import import_object, rst, logging
-from sphinx.util.docutils import NullReporter, new_document
+from sphinx.util.docutils import (
+    NullReporter, SphinxDirective, new_document, switch_source_input
+)
+from sphinx.util.matching import Matcher
 
-if TYPE_CHECKING:
+if False:
+    # For type annotation
     from typing import Any, Dict, List, Tuple, Type, Union  # NOQA
     from docutils.utils import Inliner  # NOQA
     from sphinx.application import Sphinx  # NOQA
@@ -91,7 +92,8 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-periods_re = re.compile('\.(?:\s+)')
+periods_re = re.compile(r'\.(?:\s+)')
+literal_re = re.compile(r'::\s*$')
 
 
 # -- autosummary_toc node ------------------------------------------------------
@@ -172,8 +174,8 @@ class FakeDirective(DocumenterBridge):
         super(FakeDirective, self).__init__({}, None, Options(), 0)  # type: ignore
 
 
-def get_documenter(*args):
-    # type: (Any) -> Type[Documenter]
+def get_documenter(app, obj, parent):
+    # type: (Sphinx, Any, Any) -> Type[Documenter]
     """Get an autodoc.Documenter class suitable for documenting the given
     object.
 
@@ -182,16 +184,6 @@ def get_documenter(*args):
     belongs to.
     """
     from sphinx.ext.autodoc import DataDocumenter, ModuleDocumenter
-    if len(args) == 3:
-        # new style arguments: (app, obj, parent)
-        app, obj, parent = args
-    else:
-        # old style arguments: (obj, parent)
-        app = _app
-        obj, parent = args
-        warnings.warn('the interface of get_documenter() has been changed. '
-                      'Please give application object as first argument.',
-                      RemovedInSphinx20Warning)
 
     if inspect.ismodule(obj):
         # ModuleDocumenter.can_document_member always returns False
@@ -220,7 +212,7 @@ def get_documenter(*args):
 
 # -- .. autosummary:: ----------------------------------------------------------
 
-class Autosummary(Directive):
+class Autosummary(SphinxDirective):
     """
     Pretty table containing short signatures and summaries of functions etc.
 
@@ -244,7 +236,6 @@ class Autosummary(Directive):
 
     def run(self):
         # type: () -> List[nodes.Node]
-        self.env = env = self.state.document.settings.env
         self.genopt = Options()
         self.warnings = []  # type: List[nodes.Node]
         self.result = ViewList()
@@ -255,16 +246,21 @@ class Autosummary(Directive):
         nodes = self.get_table(items)
 
         if 'toctree' in self.options:
-            dirname = posixpath.dirname(env.docname)
+            dirname = posixpath.dirname(self.env.docname)
 
             tree_prefix = self.options['toctree'].strip()
             docnames = []
+            excluded = Matcher(self.config.exclude_patterns)
             for name, sig, summary, real_name in items:
                 docname = posixpath.join(tree_prefix, real_name)
                 docname = posixpath.normpath(posixpath.join(dirname, docname))
-                if docname not in env.found_docs:
-                    self.warn('toctree references unknown document %r'
-                              % docname)
+                if docname not in self.env.found_docs:
+                    if excluded(self.env.doc2path(docname, None)):
+                        self.warn('toctree references excluded document %r'
+                                  % docname)
+                    else:
+                        self.warn('toctree references unknown document %r'
+                                  % docname)
                 docnames.append(docname)
 
             tocnode = addnodes.toctree()
@@ -283,9 +279,7 @@ class Autosummary(Directive):
         """Try to import the given names, and return a list of
         ``[(name, signature, summary_string, real_name), ...]``.
         """
-        env = self.state.document.settings.env
-
-        prefixes = get_import_prefixes_from_env(env)
+        prefixes = get_import_prefixes_from_env(self.env)
 
         items = []  # type: List[Tuple[unicode, unicode, unicode, unicode]]
 
@@ -361,7 +355,7 @@ class Autosummary(Directive):
         *items* is a list produced by :meth:`get_items`.
         """
         table_spec = addnodes.tabular_col_spec()
-        table_spec['spec'] = r'p{0.5\linewidth}p{0.5\linewidth}'
+        table_spec['spec'] = r'\X{1}{2}\X{1}{2}'
 
         table = autosummary_table('')
         real_table = nodes.table('', classes=['longtable'])
@@ -376,17 +370,19 @@ class Autosummary(Directive):
         def append_row(*column_texts):
             # type: (unicode) -> None
             row = nodes.row('')
+            source, line = self.state_machine.get_source_and_line()
             for text in column_texts:
                 node = nodes.paragraph('')
                 vl = ViewList()
-                vl.append(text, '<autosummary>')
-                self.state.nested_parse(vl, 0, node)
-                try:
-                    if isinstance(node[0], nodes.paragraph):
-                        node = node[0]
-                except IndexError:
-                    pass
-                row.append(nodes.entry('', node))
+                vl.append(text, '%s:%d:<autosummary>' % (source, line))
+                with switch_source_input(self.state, vl):
+                    self.state.nested_parse(vl, 0, node)
+                    try:
+                        if isinstance(node[0], nodes.paragraph):
+                            node = node[0]
+                    except IndexError:
+                        pass
+                    row.append(nodes.entry('', node))
             body.append(row)
 
         for name, sig, summary, real_name in items:
@@ -427,7 +423,7 @@ def mangle_signature(sig, max_chars=30):
 
     opt_re = re.compile(r"^(.*, |)([a-zA-Z0-9_*]+)=")
     while s:
-        m = opt_re.search(s)  # type: ignore
+        m = opt_re.search(s)
         if not m:
             # The rest are arguments
             args = s.split(', ')
@@ -471,21 +467,35 @@ def extract_summary(doc, document):
             doc = doc[:i]
             break
 
-    # Try to find the "first sentence", which may span multiple lines
-    sentences = periods_re.split(" ".join(doc))  # type: ignore
-    if len(sentences) == 1:
-        summary = sentences[0].strip()
+    if doc == []:
+        return ''
+
+    # parse the docstring
+    state_machine = RSTStateMachine(state_classes, 'Body')
+    node = new_document('', document.settings)
+    node.reporter = NullReporter()
+    state_machine.run(doc, node)
+
+    if not isinstance(node[0], nodes.paragraph):
+        # document starts with non-paragraph: pick up the first line
+        summary = doc[0].strip()
     else:
-        summary = ''
-        state_machine = RSTStateMachine(state_classes, 'Body')
-        while sentences:
-            summary += sentences.pop(0) + '.'
-            node = new_document('', document.settings)
-            node.reporter = NullReporter()
-            state_machine.run([summary], node)
-            if not node.traverse(nodes.system_message):
-                # considered as that splitting by period does not break inline markups
-                break
+        # Try to find the "first sentence", which may span multiple lines
+        sentences = periods_re.split(" ".join(doc))
+        if len(sentences) == 1:
+            summary = sentences[0].strip()
+        else:
+            summary = ''
+            while sentences:
+                summary += sentences.pop(0) + '.'
+                node[:] = []
+                state_machine.run([summary], node)
+                if not node.traverse(nodes.system_message):
+                    # considered as that splitting by period does not break inline markups
+                    break
+
+    # strip literal notation mark ``::`` from tail of summary
+    summary = literal_re.sub('.', summary)
 
     return summary
 

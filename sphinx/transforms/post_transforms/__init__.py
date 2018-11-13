@@ -9,56 +9,23 @@
     :license: BSD, see LICENSE for details.
 """
 
-import warnings
-from typing import TYPE_CHECKING
-
 from docutils import nodes
-from docutils.utils import get_source_line
 
 from sphinx import addnodes
-from sphinx.deprecation import RemovedInSphinx20Warning
 from sphinx.environment import NoUri
 from sphinx.locale import __
 from sphinx.transforms import SphinxTransform
 from sphinx.util import logging
 from sphinx.util.nodes import process_only_nodes
 
-if TYPE_CHECKING:
+if False:
+    # For type annotation
     from typing import Any, Dict, List, Tuple  # NOQA
     from sphinx.application import Sphinx  # NOQA
     from sphinx.domains import Domain  # NOQA
 
 
 logger = logging.getLogger(__name__)
-
-
-class DocReferenceMigrator(SphinxTransform):
-    """Migrate :doc: reference to std domain."""
-
-    default_priority = 5  # before ReferencesResolver
-
-    def apply(self):
-        # type: () -> None
-        for node in self.document.traverse(addnodes.pending_xref):
-            if node.get('reftype') == 'doc' and node.get('refdomain') is None:
-                source, line = get_source_line(node)
-                if source and line:
-                    location = "%s:%s" % (source, line)
-                elif source:
-                    location = "%s:" % source
-                elif line:
-                    location = "<unknown>:%s" % line
-                else:
-                    location = None
-
-                message = ('Invalid pendig_xref node detected. '
-                           ':doc: reference should have refdomain=std attribute.')
-                if location:
-                    warnings.warn("%s: %s" % (location, message),
-                                  RemovedInSphinx20Warning)
-                else:
-                    warnings.warn(message, RemovedInSphinx20Warning)
-                node['refdomain'] = 'std'
 
 
 class ReferencesResolver(SphinxTransform):
@@ -156,13 +123,13 @@ class ReferencesResolver(SphinxTransform):
         warn = node.get('refwarn')
         if self.config.nitpicky:
             warn = True
-            if self.env._nitpick_ignore:
+            if self.config.nitpick_ignore:
                 dtype = domain and '%s:%s' % (domain.name, typ) or typ
-                if (dtype, target) in self.env._nitpick_ignore:
+                if (dtype, target) in self.config.nitpick_ignore:
                     warn = False
                 # for "std" types also try without domain name
                 if (not domain or domain.name == 'std') and \
-                   (typ, target) in self.env._nitpick_ignore:
+                   (typ, target) in self.config.nitpick_ignore:
                     warn = False
         if not warn:
             return
@@ -191,7 +158,6 @@ class OnlyNodeTransform(SphinxTransform):
 
 def setup(app):
     # type: (Sphinx) -> Dict[unicode, Any]
-    app.add_post_transform(DocReferenceMigrator)
     app.add_post_transform(ReferencesResolver)
     app.add_post_transform(OnlyNodeTransform)
 

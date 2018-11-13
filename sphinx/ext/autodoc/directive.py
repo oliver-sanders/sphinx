@@ -7,19 +7,17 @@
     :license: BSD, see LICENSE for details.
 """
 
-from typing import TYPE_CHECKING
-
 from docutils import nodes
-from docutils.parsers.rst import Directive
 from docutils.statemachine import ViewList
 from docutils.utils import assemble_option_dict
 
 from sphinx.ext.autodoc import Options, get_documenters
 from sphinx.util import logging
-from sphinx.util.docutils import switch_source_input
+from sphinx.util.docutils import SphinxDirective, switch_source_input
 from sphinx.util.nodes import nested_parse_with_titles
 
-if TYPE_CHECKING:
+if False:
+    # For type annotation
     from typing import Any, Dict, List, Set, Type  # NOQA
     from docutils.statemachine import State, StateMachine, StringList  # NOQA
     from docutils.utils import Reporter  # NOQA
@@ -33,10 +31,10 @@ logger = logging.getLogger(__name__)
 # common option names for autodoc directives
 AUTODOC_DEFAULT_OPTIONS = ['members', 'undoc-members', 'inherited-members',
                            'show-inheritance', 'private-members', 'special-members',
-                           'ignore-module-all']
+                           'ignore-module-all', 'exclude-members', 'member-order']
 
 
-class DummyOptionSpec(object):
+class DummyOptionSpec:
     """An option_spec allows any options."""
 
     def __getitem__(self, key):
@@ -44,7 +42,7 @@ class DummyOptionSpec(object):
         return lambda x: x
 
 
-class DocumenterBridge(object):
+class DocumenterBridge:
     """A parameters container for Documenters."""
 
     def __init__(self, env, reporter, options, lineno):
@@ -69,8 +67,8 @@ def process_documenter_options(documenter, config, options):
             continue
         else:
             negated = options.pop('no-' + name, True) is None
-            if name in config.autodoc_default_flags and not negated:
-                options[name] = None
+            if name in config.autodoc_default_options and not negated:
+                options[name] = config.autodoc_default_options[name]
 
     return Options(assemble_option_dict(options.items(), documenter.option_spec))
 
@@ -92,7 +90,7 @@ def parse_generated_content(state, content, documenter):
         return node.children
 
 
-class AutodocDirective(Directive):
+class AutodocDirective(SphinxDirective):
     """A directive class for all autodoc directives. It works as a dispatcher of Documenters.
 
     It invokes a Documenter on running. After the processing, it parses and returns
@@ -106,7 +104,6 @@ class AutodocDirective(Directive):
 
     def run(self):
         # type: () -> List[nodes.Node]
-        env = self.state.document.settings.env
         reporter = self.state.document.reporter
 
         try:
@@ -117,11 +114,11 @@ class AutodocDirective(Directive):
 
         # look up target Documenter
         objtype = self.name[4:]  # strip prefix (auto-).
-        doccls = get_documenters(env.app)[objtype]
+        doccls = get_documenters(self.env.app)[objtype]
 
         # process the options with the selected documenter's option_spec
         try:
-            documenter_options = process_documenter_options(doccls, env.config, self.options)
+            documenter_options = process_documenter_options(doccls, self.config, self.options)
         except (KeyError, ValueError, TypeError) as exc:
             # an option is either unknown or has a wrong type
             logger.error('An option to %s is either unknown or has an invalid value: %s' %
@@ -129,7 +126,7 @@ class AutodocDirective(Directive):
             return []
 
         # generate the output
-        params = DocumenterBridge(env, reporter, documenter_options, lineno)
+        params = DocumenterBridge(self.env, reporter, documenter_options, lineno)
         documenter = doccls(params, self.arguments[0])
         documenter.generate(more_content=self.content)
         if not params.result:

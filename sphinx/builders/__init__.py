@@ -9,22 +9,24 @@
     :license: BSD, see LICENSE for details.
 """
 
-import warnings
+import pickle
+import time
 from os import path
-from typing import TYPE_CHECKING
 
 from docutils import nodes
 
-from sphinx.deprecation import RemovedInSphinx20Warning
-from sphinx.environment import BuildEnvironment
+from sphinx.environment import CONFIG_OK, CONFIG_CHANGED_REASON
 from sphinx.environment.adapters.asset import ImageAdapter
 from sphinx.errors import SphinxError
+from sphinx.io import read_doc
 from sphinx.locale import __
-from sphinx.util import i18n, import_object, logging, status_iterator
+from sphinx.util import i18n, import_object, logging, rst, status_iterator
 from sphinx.util.build_phase import BuildPhase
 from sphinx.util.console import bold  # type: ignore
+from sphinx.util.docutils import sphinx_domains
 from sphinx.util.i18n import find_catalog
-from sphinx.util.osutil import SEP, ensuredir, relative_uri
+from sphinx.util.matching import Matcher
+from sphinx.util.osutil import SEP, ensuredir, relative_uri, relpath
 from sphinx.util.parallel import ParallelTasks, SerialTasks, make_chunks, \
     parallel_available
 
@@ -37,8 +39,9 @@ try:
 except ImportError:
     multiprocessing = None
 
-if TYPE_CHECKING:
-    from typing import Any, Callable, Dict, Iterable, List, Sequence, Set, Tuple, Union  # NOQA
+if False:
+    # For type annotation
+    from typing import Any, Callable, Dict, Iterable, List, Sequence, Set, Tuple, Type, Union  # NOQA
     from sphinx.application import Sphinx  # NOQA
     from sphinx.config import Config  # NOQA
     from sphinx.environment import BuildEnvironment  # NOQA
@@ -49,7 +52,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class Builder(object):
+class Builder:
     """
     Builds target formats from the reST sources.
     """
@@ -92,8 +95,6 @@ class Builder(object):
 
         self.app = app              # type: Sphinx
         self.env = None             # type: BuildEnvironment
-        self.warn = app.warn        # type: Callable
-        self.info = app.info        # type: Callable
         self.config = app.config    # type: Config
         self.tags = app.tags        # type: Tags
         self.tags.add(self.format)
@@ -120,7 +121,7 @@ class Builder(object):
                                        self.versioning_compare)
 
     def get_translator_class(self, *args):
-        # type: (Any) -> nodes.NodeVisitor
+        # type: (Any) -> Type[nodes.NodeVisitor]
         """Return a class of translator."""
         return self.app.registry.get_translator_class(self)
 
@@ -132,22 +133,6 @@ class Builder(object):
         Users can replace the translator class with ``app.set_translator()`` API.
         """
         return self.app.registry.create_translator(self, *args)
-
-    @property
-    def translator_class(self):
-        # type: () -> Callable[[Any], nodes.NodeVisitor]
-        """Return a class of translator.
-
-        .. deprecated:: 1.6
-        """
-        translator_class = self.app.registry.get_translator_class(self)
-        if translator_class is None and self.default_translator_class is None:
-            warnings.warn('builder.translator_class() is now deprecated. '
-                          'Please use builder.create_translator() and '
-                          'builder.default_translator_class instead.',
-                          RemovedInSphinx20Warning)
-            return None
-        return self.create_translator
 
     # helper methods
     def init(self):
@@ -215,9 +200,15 @@ class Builder(object):
                     if candidate:
                         break
                 else:
-                    logger.warning(__('no matching candidate for image URI %r'),
-                                   images.get_original_image_uri(node['uri']),
-                                   location=node)
+                    mimetypes = sorted(node['candidates'])
+                    image_uri = images.get_original_image_uri(node['uri'])
+                    if mimetypes:
+                        logger.warning(__('a suitable image for %s builder not found: '
+                                          '%s (%s)'),
+                                       self.name, mimetypes, image_uri, location=node)
+                    else:
+                        logger.warning(__('a suitable image for %s builder not found: %s'),
+                                       self.name, image_uri, location=node)
                     continue
                 node['uri'] = candidate
             else:
@@ -236,7 +227,7 @@ class Builder(object):
 
         def cat2relpath(cat):
             # type: (CatalogInfo) -> unicode
-            return path.relpath(cat.mo_path, self.env.srcdir).replace(path.sep, SEP)
+            return relpath(cat.mo_path, self.env.srcdir).replace(path.sep, SEP)
 
         logger.info(bold(__('building [mo]: ')) + message)
         for catalog in status_iterator(catalogs, __('writing output... '), "darkgreen",
@@ -250,8 +241,8 @@ class Builder(object):
             [path.join(self.srcdir, x) for x in self.config.locale_dirs],
             self.config.language,
             charset=self.config.source_encoding,
-            gettext_compact=self.config.gettext_compact,
-            force_all=True)
+            force_all=True,
+            excluded=Matcher(['**/.?**']))
         message = __('all of %d po files') % len(catalogs)
         self.compile_catalogs(catalogs, message)
 
@@ -272,7 +263,7 @@ class Builder(object):
             self.config.language,
             domains=list(specified_domains),
             charset=self.config.source_encoding,
-            gettext_compact=self.config.gettext_compact)
+            excluded=Matcher(['**/.?**']))
         message = __('targets for %d po files that are specified') % len(catalogs)
         self.compile_catalogs(catalogs, message)
 
@@ -282,7 +273,7 @@ class Builder(object):
             [path.join(self.srcdir, x) for x in self.config.locale_dirs],
             self.config.language,
             charset=self.config.source_encoding,
-            gettext_compact=self.config.gettext_compact)
+            excluded=Matcher(['**/.?**']))
         message = __('targets for %d po files that are out of date') % len(catalogs)
         self.compile_catalogs(catalogs, message)
 
@@ -362,7 +353,8 @@ class Builder(object):
             # save the environment
             from sphinx.application import ENV_PICKLE_FILENAME
             logger.info(bold(__('pickling environment... ')), nonl=True)
-            self.env.topickle(path.join(self.doctreedir, ENV_PICKLE_FILENAME))
+            with open(path.join(self.doctreedir, ENV_PICKLE_FILENAME), 'wb') as f:
+                pickle.dump(self.env, f, pickle.HIGHEST_PROTOCOL)
             logger.info(__('done'))
 
             # global actions
@@ -412,11 +404,10 @@ class Builder(object):
         Store all environment docnames in the canonical format (ie using SEP as
         a separator in place of os.path.sep).
         """
-        updated, reason = self.env.update_config(self.config, self.srcdir, self.doctreedir)
-
         logger.info(bold('updating environment: '), nonl=True)
 
         self.env.find_files(self.config, self)
+        updated = (self.env.config_status != CONFIG_OK)
         added, changed, removed = self.env.get_outdated_files(updated)
 
         # allow user intervention as well
@@ -430,6 +421,7 @@ class Builder(object):
             changed.update(self.env.glob_toctrees & self.env.found_docs)
 
         if changed:
+            reason = CONFIG_CHANGED_REASON.get(self.env.config_status, '')
             logger.info('[%s] ', reason, nonl=True)
         logger.info('%s added, %s changed, %s removed',
                     len(added), len(changed), len(removed))
@@ -463,6 +455,9 @@ class Builder(object):
             if retval is not None:
                 docnames.extend(retval)
 
+        # workaround: marked as okay to call builder.read() twice in same process
+        self.env.config_status = CONFIG_OK
+
         return sorted(docnames)
 
     def _read_serial(self, docnames):
@@ -472,7 +467,7 @@ class Builder(object):
             # remove all inventory entries for that file
             self.app.emit('env-purge-doc', self.env, docname)
             self.env.clear_doc(docname)
-            self.env.read_doc(docname, self.app)
+            self.read_doc(docname)
 
     def _read_parallel(self, docnames, nproc):
         # type: (List[unicode], int) -> None
@@ -482,16 +477,16 @@ class Builder(object):
             self.env.clear_doc(docname)
 
         def read_process(docs):
-            # type: (List[unicode]) -> unicode
+            # type: (List[unicode]) -> bytes
             self.env.app = self.app
             for docname in docs:
-                self.env.read_doc(docname, self.app)
+                self.read_doc(docname)
             # allow pickling self to send it back
-            return BuildEnvironment.dumps(self.env)
+            return pickle.dumps(self.env, pickle.HIGHEST_PROTOCOL)
 
         def merge(docs, otherenv):
-            # type: (List[unicode], unicode) -> None
-            env = BuildEnvironment.loads(otherenv)
+            # type: (List[unicode], bytes) -> None
+            env = pickle.loads(otherenv)
             self.env.merge_info_from(docs, env, self.app)
 
         tasks = ParallelTasks(nproc)
@@ -504,6 +499,47 @@ class Builder(object):
         # make sure all threads have finished
         logger.info(bold('waiting for workers...'))
         tasks.join()
+
+    def read_doc(self, docname):
+        # type: (unicode) -> None
+        """Parse a file and add/update inventory entries for the doctree."""
+        self.env.prepare_settings(docname)
+
+        # Add confdir/docutils.conf to dependencies list if exists
+        docutilsconf = path.join(self.confdir, 'docutils.conf')
+        if path.isfile(docutilsconf):
+            self.env.note_dependency(docutilsconf)
+
+        with sphinx_domains(self.env), rst.default_role(docname, self.config.default_role):
+            doctree = read_doc(self.app, self.env, self.env.doc2path(docname))
+
+        # store time of reading, for outdated files detection
+        # (Some filesystems have coarse timestamp resolution;
+        # therefore time.time() can be older than filesystem's timestamp.
+        # For example, FAT32 has 2sec timestamp resolution.)
+        self.env.all_docs[docname] = max(time.time(),
+                                         path.getmtime(self.env.doc2path(docname)))
+
+        # cleanup
+        self.env.temp_data.clear()
+        self.env.ref_context.clear()
+
+        self.write_doctree(docname, doctree)
+
+    def write_doctree(self, docname, doctree):
+        # type: (unicode, nodes.Node) -> None
+        """Write the doctree to a file."""
+        # make it picklable
+        doctree.reporter = None
+        doctree.transformer = None
+        doctree.settings.warning_stream = None
+        doctree.settings.env = None
+        doctree.settings.record_dependencies = None
+
+        doctree_filename = path.join(self.doctreedir, docname + '.doctree')
+        ensuredir(path.dirname(doctree_filename))
+        with open(doctree_filename, 'wb') as f:
+            pickle.dump(doctree, f, pickle.HIGHEST_PROTOCOL)
 
     def write(self, build_docnames, updated_docnames, method='update'):
         # type: (Iterable[unicode], Sequence[unicode], unicode) -> None

@@ -10,7 +10,6 @@
 """
 
 from os import path
-from typing import TYPE_CHECKING
 
 from docutils.frontend import OptionParser
 from docutils.io import FileOutput
@@ -26,7 +25,8 @@ from sphinx.util.nodes import inline_all_toctrees
 from sphinx.util.osutil import make_filename
 from sphinx.writers.manpage import ManualPageWriter, ManualPageTranslator
 
-if TYPE_CHECKING:
+if False:
+    # For type annotation
     from typing import Any, Dict, List, Set, Union  # NOQA
     from sphinx.application import Sphinx  # NOQA
 
@@ -73,6 +73,10 @@ class ManualPageBuilder(Builder):
 
         for info in self.config.man_pages:
             docname, name, description, authors, section = info
+            if docname not in self.env.all_docs:
+                logger.warning(__('"man_pages" config value references unknown '
+                                  'document %s'), docname)
+                continue
             if isinstance(authors, string_types):
                 if authors:
                     authors = [authors]

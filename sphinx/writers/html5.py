@@ -12,18 +12,20 @@
 import os
 import posixpath
 import sys
-from typing import TYPE_CHECKING
+import warnings
 
 from docutils import nodes
 from docutils.writers.html5_polyglot import HTMLTranslator as BaseTranslator
 from six import string_types
 
 from sphinx import addnodes
+from sphinx.deprecation import RemovedInSphinx30Warning
 from sphinx.locale import admonitionlabels, _, __
 from sphinx.util import logging
 from sphinx.util.images import get_image_size
 
-if TYPE_CHECKING:
+if False:
+    # For type annotation
     from typing import Any  # NOQA
     from sphinx.builders.html import StandaloneHTMLBuilder  # NOQA
 
@@ -41,13 +43,9 @@ class HTML5Translator(BaseTranslator):
 
     def __init__(self, builder, *args, **kwds):
         # type: (StandaloneHTMLBuilder, Any, Any) -> None
-        BaseTranslator.__init__(self, *args, **kwds)
+        super(HTML5Translator, self).__init__(*args, **kwds)
         self.highlighter = builder.highlighter
         self.builder = builder
-        self.highlightlang = self.highlightlang_base = \
-            builder.config.highlight_language
-        self.highlightopts = builder.config.highlight_options
-        self.highlightlinenothreshold = sys.maxsize
         self.docnames = [builder.current_docname]  # for singlehtml builder
         self.manpages_url = builder.config.manpages_url
         self.protect_literal_text = 0
@@ -310,7 +308,7 @@ class HTML5Translator(BaseTranslator):
                     self.body.append(prefix % '.'.join(map(str, numbers)) + ' ')
                     self.body.append('</span>')
 
-        figtype = self.builder.env.domains['std'].get_figtype(node)  # type: ignore
+        figtype = self.builder.env.domains['std'].get_enumerable_node_type(node)
         if figtype:
             if len(node['ids']) == 0:
                 msg = __('Any IDs not assigned for %s node') % node.tagname
@@ -369,19 +367,14 @@ class HTML5Translator(BaseTranslator):
         if node.rawsource != node.astext():
             # most probably a parsed-literal block -- don't highlight
             return BaseTranslator.visit_literal_block(self, node)
-        lang = self.highlightlang
-        linenos = node.rawsource.count('\n') >= \
-            self.highlightlinenothreshold - 1
+
+        lang = node.get('language', 'default')
+        linenos = node.get('linenos', False)
         highlight_args = node.get('highlight_args', {})
-        if 'language' in node:
-            # code-block directives
-            lang = node['language']
-            highlight_args['force'] = True
-        if 'linenos' in node:
-            linenos = node['linenos']
-        if lang is self.highlightlang_base:
+        highlight_args['force'] = node.get('force_highlighting', False)
+        if lang is self.builder.config.highlight_language:
             # only pass highlighter options for original language
-            opts = self.highlightopts
+            opts = self.builder.config.highlight_options
         else:
             opts = {}
 
@@ -515,21 +508,22 @@ class HTML5Translator(BaseTranslator):
         # type: (nodes.Node) -> None
         pass
 
-    def visit_highlightlang(self, node):
-        # type: (nodes.Node) -> None
-        self.highlightlang = node['lang']
-        self.highlightlinenothreshold = node['linenothreshold']
-
-    def depart_highlightlang(self, node):
-        # type: (nodes.Node) -> None
-        pass
-
     def visit_download_reference(self, node):
         # type: (nodes.Node) -> None
-        if self.builder.download_support and node.hasattr('filename'):
-            self.body.append(
-                '<a class="reference download internal" href="%s" download="">' %
-                posixpath.join(self.builder.dlpath, node['filename']))
+        atts = {'class': 'reference download',
+                'download': ''}
+
+        if not self.builder.download_support:
+            self.context.append('')
+        elif 'refuri' in node:
+            atts['class'] += ' external'
+            atts['href'] = node['refuri']
+            self.body.append(self.starttag(node, 'a', '', **atts))
+            self.context.append('</a>')
+        elif 'filename' in node:
+            atts['class'] += ' internal'
+            atts['href'] = posixpath.join(self.builder.dlpath, node['filename'])
+            self.body.append(self.starttag(node, 'a', '', **atts))
             self.context.append('</a>')
         else:
             self.context.append('')
@@ -825,12 +819,60 @@ class HTML5Translator(BaseTranslator):
 
     def visit_math(self, node, math_env=''):
         # type: (nodes.Node, unicode) -> None
-        logger.warning(__('using "math" markup without a Sphinx math extension '
-                          'active, please use one of the math extensions '
-                          'described at http://sphinx-doc.org/ext/math.html'),
-                       location=(self.builder.current_docname, node.line))
-        raise nodes.SkipNode
+        name = self.builder.math_renderer_name
+        visit, _ = self.builder.app.registry.html_inline_math_renderers[name]
+        visit(self, node)
+
+    def depart_math(self, node, math_env=''):
+        # type: (nodes.Node, unicode) -> None
+        name = self.builder.math_renderer_name
+        _, depart = self.builder.app.registry.html_inline_math_renderers[name]
+        if depart:
+            depart(self, node)
+
+    def visit_math_block(self, node, math_env=''):
+        # type: (nodes.Node, unicode) -> None
+        name = self.builder.math_renderer_name
+        visit, _ = self.builder.app.registry.html_block_math_renderers[name]
+        visit(self, node)
+
+    def depart_math_block(self, node, math_env=''):
+        # type: (nodes.Node, unicode) -> None
+        name = self.builder.math_renderer_name
+        _, depart = self.builder.app.registry.html_block_math_renderers[name]
+        if depart:
+            depart(self, node)
 
     def unknown_visit(self, node):
         # type: (nodes.Node) -> None
         raise NotImplementedError('Unknown node: ' + node.__class__.__name__)
+
+    # --------- METHODS FOR COMPATIBILITY --------------------------------------
+
+    @property
+    def highlightlang(self):
+        # type: () -> unicode
+        warnings.warn('HTMLTranslator.highlightlang is deprecated.',
+                      RemovedInSphinx30Warning, stacklevel=2)
+        return self.builder.config.highlight_language
+
+    @property
+    def highlightlang_base(self):
+        # type: () -> unicode
+        warnings.warn('HTMLTranslator.highlightlang_base is deprecated.',
+                      RemovedInSphinx30Warning, stacklevel=2)
+        return self.builder.config.highlight_language
+
+    @property
+    def highlightopts(self):
+        # type: () -> unicode
+        warnings.warn('HTMLTranslator.highlightopts is deprecated.',
+                      RemovedInSphinx30Warning, stacklevel=2)
+        return self.builder.config.highlight_options
+
+    @property
+    def highlightlinenothreshold(self):
+        # type: () -> int
+        warnings.warn('HTMLTranslator.highlightlinenothreshold is deprecated.',
+                      RemovedInSphinx30Warning, stacklevel=2)
+        return sys.maxsize

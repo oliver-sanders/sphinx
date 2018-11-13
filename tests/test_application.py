@@ -11,8 +11,7 @@
 import pytest
 from docutils import nodes
 
-from sphinx.application import ExtensionError
-from sphinx.domains import Domain
+from sphinx.errors import ExtensionError
 from sphinx.testing.util import strip_escseq
 from sphinx.util import logging
 
@@ -49,35 +48,14 @@ def test_emit_with_nonascii_name_node(app, status, warning):
 
 def test_extensions(app, status, warning):
     app.setup_extension('shutil')
-    assert strip_escseq(warning.getvalue()).startswith("WARNING: extension 'shutil'")
+    warning = strip_escseq(warning.getvalue())
+    assert "extension 'shutil' has no setup() function" in warning
 
 
 def test_extension_in_blacklist(app, status, warning):
     app.setup_extension('sphinxjp.themecore')
     msg = strip_escseq(warning.getvalue())
     assert msg.startswith("WARNING: the extension 'sphinxjp.themecore' was")
-
-
-def test_domain_override(app, status, warning):
-    class A(Domain):
-        name = 'foo'
-
-    class B(A):
-        name = 'foo'
-
-    class C(Domain):
-        name = 'foo'
-
-    # No domain know named foo.
-    with pytest.raises(ExtensionError) as excinfo:
-        app.override_domain(A)
-    assert 'domain foo not yet registered' in str(excinfo.value)
-
-    assert app.add_domain(A) is None
-    assert app.override_domain(B) is None
-    with pytest.raises(ExtensionError) as excinfo:
-        app.override_domain(C)
-    assert 'new domain not a subclass of registered foo domain' in str(excinfo.value)
 
 
 @pytest.mark.sphinx(testroot='add_source_parser')

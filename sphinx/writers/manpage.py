@@ -9,22 +9,20 @@
     :license: BSD, see LICENSE for details.
 """
 
-from typing import TYPE_CHECKING
-
 from docutils import nodes
 from docutils.writers.manpage import (
-    MACRO_DEF,
     Writer,
     Translator as BaseTranslator
 )
 
-import sphinx.util.docutils
 from sphinx import addnodes
-from sphinx.locale import admonitionlabels, _, __
+from sphinx.locale import admonitionlabels, _
 from sphinx.util import logging
 from sphinx.util.i18n import format_date
+from sphinx.util.nodes import NodeMatcher
 
-if TYPE_CHECKING:
+if False:
+    # For type annotation
     from typing import Any  # NOQA
     from sphinx.builders import Builder  # NOQA
 
@@ -34,7 +32,7 @@ logger = logging.getLogger(__name__)
 class ManualPageWriter(Writer):
     def __init__(self, builder):
         # type: (Builder) -> None
-        Writer.__init__(self)
+        super(ManualPageWriter, self).__init__()
         self.builder = builder
 
     def translate(self):
@@ -47,7 +45,7 @@ class ManualPageWriter(Writer):
         self.output = visitor.astext()
 
 
-class NestedInlineTransform(object):
+class NestedInlineTransform:
     """
     Flatten nested inline nodes:
 
@@ -64,16 +62,13 @@ class NestedInlineTransform(object):
 
     def apply(self):
         # type: () -> None
-        def is_inline(node):
-            # type: (nodes.Node) -> bool
-            return isinstance(node, (nodes.literal, nodes.emphasis, nodes.strong))
-
-        for node in self.document.traverse(is_inline):
-            if any(is_inline(subnode) for subnode in node):
+        matcher = NodeMatcher(nodes.literal, nodes.emphasis, nodes.strong)
+        for node in self.document.traverse(matcher):
+            if any(matcher(subnode) for subnode in node):
                 pos = node.parent.index(node)
                 for subnode in reversed(node[1:]):
                     node.remove(subnode)
-                    if is_inline(subnode):
+                    if matcher(subnode):
                         node.parent.insert(pos + 1, subnode)
                     else:
                         newnode = node.__class__('', subnode, **node.attributes)
@@ -87,7 +82,7 @@ class ManualPageTranslator(BaseTranslator):
 
     def __init__(self, builder, *args, **kwds):
         # type: (Builder, Any, Any) -> None
-        BaseTranslator.__init__(self, *args, **kwds)
+        super(ManualPageTranslator, self).__init__(*args, **kwds)
         self.builder = builder
 
         self.in_productionlist = 0
@@ -113,10 +108,6 @@ class ManualPageTranslator(BaseTranslator):
         self._docinfo['copyright'] = builder.config.copyright
         self._docinfo['version'] = builder.config.version
         self._docinfo['manual_group'] = builder.config.project
-
-        # In docutils < 0.11 self.append_header() was never called
-        if sphinx.util.docutils.__version_info__ < (0, 11):
-            self.body.append(MACRO_DEF)
 
         # Overwrite admonition label translations with our own
         for label, translation in admonitionlabels.items():
@@ -379,14 +370,6 @@ class ManualPageTranslator(BaseTranslator):
         # type: (nodes.Node) -> None
         pass
 
-    def visit_highlightlang(self, node):
-        # type: (nodes.Node) -> None
-        pass
-
-    def depart_highlightlang(self, node):
-        # type: (nodes.Node) -> None
-        pass
-
     def visit_download_reference(self, node):
         # type: (nodes.Node) -> None
         pass
@@ -514,12 +497,19 @@ class ManualPageTranslator(BaseTranslator):
 
     def visit_math(self, node):
         # type: (nodes.Node) -> None
-        logger.warning(__('using "math" markup without a Sphinx math extension '
-                          'active, please use one of the math extensions '
-                          'described at http://sphinx-doc.org/ext/math.html'))
-        raise nodes.SkipNode
+        pass
 
-    visit_math_block = visit_math
+    def depart_math(self, node):
+        # type: (nodes.Node) -> None
+        pass
+
+    def visit_math_block(self, node):
+        # type: (nodes.Node) -> None
+        self.visit_centered(node)
+
+    def depart_math_block(self, node):
+        # type: (nodes.Node) -> None
+        self.depart_centered(node)
 
     def unknown_visit(self, node):
         # type: (nodes.Node) -> None

@@ -10,16 +10,14 @@
     :license: BSD, see LICENSE for details.
 """
 
-import codecs
 import posixpath
 import re
 from hashlib import sha1
 from os import path
 from subprocess import Popen, PIPE
-from typing import TYPE_CHECKING
 
 from docutils import nodes
-from docutils.parsers.rst import Directive, directives
+from docutils.parsers.rst import directives
 from docutils.statemachine import ViewList
 from six import text_type
 
@@ -27,10 +25,14 @@ import sphinx
 from sphinx.errors import SphinxError
 from sphinx.locale import _, __
 from sphinx.util import logging
+from sphinx.util.docutils import SphinxDirective
+from sphinx.util.fileutil import copy_asset
 from sphinx.util.i18n import search_image_for_language
 from sphinx.util.osutil import ensuredir, ENOENT, EPIPE, EINVAL
 
-if TYPE_CHECKING:
+if False:
+    # For type annotation
+    from docutils.parsers.rst import Directive  # NOQA
     from typing import Any, Dict, List, Tuple  # NOQA
     from sphinx.application import Sphinx  # NOQA
 
@@ -41,7 +43,7 @@ class GraphvizError(SphinxError):
     category = 'Graphviz error'
 
 
-class ClickableMapDefinition(object):
+class ClickableMapDefinition:
     """A manipulator for clickable map file of graphviz."""
     maptag_re = re.compile('<map id="(.*?)"')
     href_re = re.compile('href=".*?"')
@@ -57,7 +59,7 @@ class ClickableMapDefinition(object):
 
     def parse(self, dot=None):
         # type: (unicode) -> None
-        matched = self.maptag_re.match(self.content[0])   # type: ignore
+        matched = self.maptag_re.match(self.content[0])
         if not matched:
             raise GraphvizError('Invalid clickable map file found: %s' % self.filename)
 
@@ -70,7 +72,7 @@ class ClickableMapDefinition(object):
             self.content[0] = self.content[0].replace('%3', self.id)
 
         for line in self.content:
-            if self.href_re.search(line):  # type: ignore
+            if self.href_re.search(line):
                 self.clickable.append(line)
 
     def generate_clickable_map(self):
@@ -111,7 +113,7 @@ def align_spec(argument):
     return directives.choice(argument, ('left', 'center', 'right'))
 
 
-class Graphviz(Directive):
+class Graphviz(SphinxDirective):
     """
     Directive to insert arbitrary dot markup.
     """
@@ -135,12 +137,11 @@ class Graphviz(Directive):
                 return [document.reporter.warning(
                     __('Graphviz directive cannot have both content and '
                        'a filename argument'), line=self.lineno)]
-            env = self.state.document.settings.env
-            argument = search_image_for_language(self.arguments[0], env)
-            rel_filename, filename = env.relfn2path(argument)
-            env.note_dependency(rel_filename)
+            argument = search_image_for_language(self.arguments[0], self.env)
+            rel_filename, filename = self.env.relfn2path(argument)
+            self.env.note_dependency(rel_filename)
             try:
-                with codecs.open(filename, 'r', 'utf-8') as fp:
+                with open(filename, 'r', encoding='utf-8') as fp:  # type: ignore
                     dotcode = fp.read()
             except (IOError, OSError):
                 return [document.reporter.warning(
@@ -154,7 +155,8 @@ class Graphviz(Directive):
                     line=self.lineno)]
         node = graphviz()
         node['code'] = dotcode
-        node['options'] = {}
+        node['options'] = {'docname': self.env.docname}
+
         if 'graphviz_dot' in self.options:
             node['options']['graphviz_dot'] = self.options['graphviz_dot']
         if 'alt' in self.options:
@@ -170,7 +172,7 @@ class Graphviz(Directive):
         return [node]
 
 
-class GraphvizSimple(Directive):
+class GraphvizSimple(SphinxDirective):
     """
     Directive to insert arbitrary dot markup.
     """
@@ -191,7 +193,9 @@ class GraphvizSimple(Directive):
         node = graphviz()
         node['code'] = '%s %s {\n%s\n}\n' % \
                        (self.name, self.arguments[0], '\n'.join(self.content))
-        node['options'] = {}
+        node['options'] = {
+            'docname': path.splitext(self.state.document.current_source)[0],
+        }
         if 'graphviz_dot' in self.options:
             node['options']['graphviz_dot'] = self.options['graphviz_dot']
         if 'alt' in self.options:
@@ -234,10 +238,14 @@ def render_dot(self, code, options, format, prefix='graphviz'):
     dot_args = [graphviz_dot]
     dot_args.extend(self.builder.config.graphviz_dot_args)
     dot_args.extend(['-T' + format, '-o' + outfn])
+
+    docname = options.get('docname', 'index')
+    cwd = path.dirname(path.join(self.builder.srcdir, docname))
+
     if format == 'png':
         dot_args.extend(['-Tcmapx', '-o%s.map' % outfn])
     try:
-        p = Popen(dot_args, stdout=PIPE, stdin=PIPE, stderr=PIPE)
+        p = Popen(dot_args, stdout=PIPE, stdin=PIPE, stderr=PIPE, cwd=cwd)
     except OSError as err:
         if err.errno != ENOENT:   # No such file or directory
             raise
@@ -280,31 +288,41 @@ def render_dot_html(self, node, code, options, prefix='graphviz',
         logger.warning(__('dot code %r: %s'), code, text_type(exc))
         raise nodes.SkipNode
 
+    if imgcls:
+        imgcls += " graphviz"
+    else:
+        imgcls = "graphviz"
+
     if fname is None:
         self.body.append(self.encode(code))
     else:
         if alt is None:
             alt = node.get('alt', self.encode(code).strip())
-        imgcss = imgcls and 'class="%s"' % imgcls or ''
         if 'align' in node:
             self.body.append('<div align="%s" class="align-%s">' %
                              (node['align'], node['align']))
         if format == 'svg':
-            svgtag = '''<object data="%s" type="image/svg+xml">
-            <p class="warning">%s</p></object>\n''' % (fname, alt)
-            self.body.append(svgtag)
+            self.body.append('<div class="graphviz">')
+            self.body.append('<object data="%s" type="image/svg+xml" class="%s">\n' %
+                             (fname, imgcls))
+            self.body.append('<p class="warning">%s</p>' % alt)
+            self.body.append('</object></div>\n')
         else:
-            with codecs.open(outfn + '.map', 'r', encoding='utf-8') as mapfile:  # type: ignore
+            with open(outfn + '.map', 'r', encoding='utf-8') as mapfile:  # type: ignore
                 imgmap = ClickableMapDefinition(outfn + '.map', mapfile.read(), dot=code)
                 if imgmap.clickable:
                     # has a map
-                    self.body.append('<img src="%s" alt="%s" usemap="#%s" %s/>\n' %
-                                     (fname, alt, imgmap.id, imgcss))
+                    self.body.append('<div class="graphviz">')
+                    self.body.append('<img src="%s" alt="%s" usemap="#%s" class="%s" />' %
+                                     (fname, alt, imgmap.id, imgcls))
+                    self.body.append('</div>\n')
                     self.body.append(imgmap.generate_clickable_map())
                 else:
                     # nothing in image map
-                    self.body.append('<img src="%s" alt="%s" %s/>\n' %
-                                     (fname, alt, imgcss))
+                    self.body.append('<div class="graphviz">')
+                    self.body.append('<img src="%s" alt="%s" class="%s" />' %
+                                     (fname, alt, imgcls))
+                    self.body.append('</div>\n')
         if 'align' in node:
             self.body.append('</div>\n')
 
@@ -389,6 +407,14 @@ def man_visit_graphviz(self, node):
     raise nodes.SkipNode
 
 
+def on_build_finished(app, exc):
+    # type: (Sphinx, Exception) -> None
+    if exc is None:
+        src = path.join(sphinx.package_dir, 'templates', 'graphviz', 'graphviz.css')
+        dst = path.join(app.outdir, '_static')
+        copy_asset(src, dst)
+
+
 def setup(app):
     # type: (Sphinx) -> Dict[unicode, Any]
     app.add_node(graphviz,
@@ -403,4 +429,6 @@ def setup(app):
     app.add_config_value('graphviz_dot', 'dot', 'html')
     app.add_config_value('graphviz_dot_args', [], 'html')
     app.add_config_value('graphviz_output_format', 'png', 'html')
+    app.add_css_file('graphviz.css')
+    app.connect('build-finished', on_build_finished)
     return {'version': sphinx.__display_version__, 'parallel_read_safe': True}

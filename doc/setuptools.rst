@@ -62,7 +62,7 @@ Options for setuptools integration
    A boolean that determines whether the saved environment should be discarded
    on build. Default is false.
 
-   This can also be set by passing the `-E` flag to ``setup.py``.
+   This can also be set by passing the `-E` flag to ``setup.py``:
 
    .. code-block:: bash
 
@@ -180,6 +180,14 @@ Options for setuptools integration
    The copyright string. Default is ``''``.
 
    .. versionadded:: 1.3
+
+.. confval:: nitpicky
+
+   Run in nit-picky mode.  Currently, this generates warnings for all missing
+   references.  See the config value :confval:`nitpick_ignore` for a way to
+   exclude some references as "known missing".
+
+   .. versionadded:: 1.8
 
 .. confval:: pdb
 

@@ -9,12 +9,11 @@
     :license: BSD, see LICENSE for details.
 """
 
-from typing import TYPE_CHECKING
-
 from docutils import writers
 from docutils.writers.docutils_xml import Writer as BaseXMLWriter
 
-if TYPE_CHECKING:
+if False:
+    # For type annotation
     from typing import Any, Tuple  # NOQA
     from sphinx.builders import Builder  # NOQA
 
@@ -23,7 +22,7 @@ class XMLWriter(BaseXMLWriter):
 
     def __init__(self, builder):
         # type: (Builder) -> None
-        BaseXMLWriter.__init__(self)
+        super(XMLWriter, self).__init__()
         self.builder = builder
         self.translator_class = self.builder.get_translator_class()
 
@@ -50,7 +49,7 @@ class PseudoXMLWriter(writers.Writer):
 
     def __init__(self, builder):
         # type: (Builder) -> None
-        writers.Writer.__init__(self)
+        super(PseudoXMLWriter, self).__init__()
         self.builder = builder
 
     def translate(self):

@@ -11,13 +11,12 @@
 """
 from __future__ import absolute_import
 
-from typing import TYPE_CHECKING
-
 from docutils import nodes
 
 from sphinx import addnodes
 
-if TYPE_CHECKING:
+if False:
+    # For type annotation
     from typing import Any, Dict, List, Tuple  # NOQA
     from sphinx.domains import Domain  # NOQA
     from sphinx.environment import BuildEnvironment  # NOQA
@@ -37,7 +36,7 @@ def _is_single_paragraph(node):
     return False
 
 
-class Field(object):
+class Field:
     """A doc field that is never grouped.  It can have an argument or not, the
     argument can be linked using a specified *rolename*.  Field should be used
     for doc fields that usually don't occur more than once.
@@ -139,7 +138,7 @@ class GroupedField(Field):
     def __init__(self, name, names=(), label=None, rolename=None,
                  can_collapse=False):
         # type: (unicode, Tuple[unicode, ...], unicode, unicode, bool) -> None
-        Field.__init__(self, name, names, label, True, rolename)
+        super(GroupedField, self).__init__(name, names, label, True, rolename)
         self.can_collapse = can_collapse
 
     def make_field(self,
@@ -191,7 +190,7 @@ class TypedField(GroupedField):
     def __init__(self, name, names=(), typenames=(), label=None,
                  rolename=None, typerolename=None, can_collapse=False):
         # type: (unicode, Tuple[unicode, ...], Tuple[unicode, ...], unicode, unicode, unicode, bool) -> None  # NOQA
-        GroupedField.__init__(self, name, names, label, rolename, can_collapse)
+        super(TypedField, self).__init__(name, names, label, rolename, can_collapse)
         self.typenames = typenames
         self.typerolename = typerolename
 
@@ -236,7 +235,7 @@ class TypedField(GroupedField):
         return nodes.field('', fieldname, fieldbody)
 
 
-class DocFieldTransformer(object):
+class DocFieldTransformer:
     """
     Transforms field lists in "doc field" syntax into better-looking
     equivalents, using the field type definitions given on a domain.
@@ -306,7 +305,8 @@ class DocFieldTransformer(object):
                 entries.append(field)
 
                 # but if this has a type then we can at least link it
-                if typedesc and is_typefield and content:
+                if (typedesc and is_typefield and content and
+                        len(content) == 1 and isinstance(content[0], nodes.Text)):
                     target = content[0].astext()
                     xrefs = typedesc.make_xrefs(
                         typedesc.typerolename,
@@ -319,7 +319,8 @@ class DocFieldTransformer(object):
                         fieldbody.children[0].extend(xrefs)
                     else:
                         fieldbody.clear()
-                        fieldbody.extend(xrefs)
+                        fieldbody += nodes.paragraph()
+                        fieldbody[0].extend(xrefs)
 
                 continue
 

@@ -9,21 +9,19 @@ Sphinx documentation contents
 
    usage/installation
    usage/quickstart
+   usage/restructuredtext/index
+   usage/markdown
+   usage/configuration
+   usage/builders/index
+   usage/extensions/index
 
    intro
    man/index
-   rest
-   markup/index
-   domains
-   builders
-   config
    intl
    theming
    setuptools
    templating
    latex
-   markdown
-   extensions
    extdev/index
    websupport
 

@@ -10,7 +10,7 @@
 """
 
 import pytest
-from six import iteritems, StringIO
+from six import StringIO
 
 from sphinx.ext.autosummary import mangle_signature, import_by_name, extract_summary
 from sphinx.testing.util import etree_parse
@@ -81,6 +81,15 @@ def test_extract_summary(capsys):
     doc = ['Blabla, i.e. bla.']
     assert extract_summary(doc, document) == 'Blabla, i.e.'
 
+    # literal
+    doc = ['blah blah::']
+    assert extract_summary(doc, document) == 'blah blah.'
+
+    # heading
+    doc = ['blah blah',
+           '=========']
+    assert extract_summary(doc, document) == 'blah blah'
+
     _, err = capsys.readouterr()
     assert err == ''
 
@@ -131,7 +140,7 @@ def test_get_items_summary(make_app, app_params):
         'C.prop_attr2': 'This is a attribute docstring',
         'C.C2': 'This is a nested inner class docstring',
     }
-    for key, expected in iteritems(expected_values):
+    for key, expected in expected_values.items():
         assert autosummary_items[key][2] == expected, 'Summary for %s was %r -'\
             ' expected %r' % (key, autosummary_items[key], expected)
 
@@ -186,6 +195,16 @@ def test_autosummary_generate(app, status, warning):
             '   \n'
             '      ~Foo.baz\n'
             '   \n' in Foo)
+
+
+@pytest.mark.sphinx('latex', **default_kw)
+def test_autosummary_latex_table_colspec(app, status, warning):
+    app.builder.build_all()
+    result = (app.outdir / 'Python.tex').text(encoding='utf8')
+    print(status.getvalue())
+    print(warning.getvalue())
+    assert r'\begin{longtable}{\X{1}{2}\X{1}{2}}' in result
+    assert r'p{0.5\linewidth}' not in result
 
 
 def test_import_by_name():

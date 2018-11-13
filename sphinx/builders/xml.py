@@ -9,9 +9,7 @@
     :license: BSD, see LICENSE for details.
 """
 
-import codecs
 from os import path
-from typing import TYPE_CHECKING
 
 from docutils import nodes
 from docutils.io import StringOutput
@@ -23,7 +21,8 @@ from sphinx.util import logging
 from sphinx.util.osutil import ensuredir, os_path
 from sphinx.writers.xml import XMLWriter, PseudoXMLWriter
 
-if TYPE_CHECKING:
+if False:
+    # For type annotation
     from typing import Any, Dict, Iterator, Set  # NOQA
     from sphinx.application import Sphinx  # NOQA
 
@@ -54,8 +53,7 @@ class XMLBuilder(Builder):
             if docname not in self.env.all_docs:
                 yield docname
                 continue
-            targetname = self.env.doc2path(docname, self.outdir,
-                                           self.out_suffix)
+            targetname = path.join(self.outdir, docname + self.out_suffix)
             try:
                 targetmtime = path.getmtime(targetname)
             except Exception:
@@ -95,7 +93,7 @@ class XMLBuilder(Builder):
         outfilename = path.join(self.outdir, os_path(docname) + self.out_suffix)
         ensuredir(path.dirname(outfilename))
         try:
-            with codecs.open(outfilename, 'w', 'utf-8') as f:  # type: ignore
+            with open(outfilename, 'w', encoding='utf-8') as f:  # type: ignore
                 f.write(self.writer.output)
         except (IOError, OSError) as err:
             logger.warning(__("error writing file %s: %s"), outfilename, err)

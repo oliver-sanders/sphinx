@@ -16,22 +16,23 @@ from collections import defaultdict, OrderedDict
 from datetime import datetime, tzinfo, timedelta
 from os import path, walk, getenv
 from time import time
-from typing import TYPE_CHECKING
 from uuid import uuid4
 
-from six import iteritems, StringIO
+from six import StringIO
 
 from sphinx.builders import Builder
 from sphinx.domains.python import pairindextypes
+from sphinx.errors import ThemeError
 from sphinx.locale import __
 from sphinx.util import split_index_msg, logging, status_iterator
 from sphinx.util.console import bold  # type: ignore
 from sphinx.util.i18n import find_catalog
 from sphinx.util.nodes import extract_messages, traverse_translatable_index
-from sphinx.util.osutil import safe_relpath, ensuredir, canon_path
+from sphinx.util.osutil import relpath, ensuredir, canon_path
 from sphinx.util.tags import Tags
 
-if TYPE_CHECKING:
+if False:
+    # For type annotation
     from typing import Any, DefaultDict, Dict, Iterable, List, Set, Tuple  # NOQA
     from docutils import nodes  # NOQA
     from sphinx.util.i18n import CatalogInfo  # NOQA
@@ -62,7 +63,7 @@ msgstr ""
 """[1:]
 
 
-class Catalog(object):
+class Catalog:
     """Catalog of translatable messages."""
 
     def __init__(self):
@@ -84,7 +85,7 @@ class Catalog(object):
         self.metadata[msg].append((origin.source, origin.line, origin.uid))
 
 
-class MsgOrigin(object):
+class MsgOrigin:
     """
     Origin holder for Catalog message origin.
     """
@@ -247,11 +248,14 @@ class MessageCatalogBuilder(I18nBuilder):
 
         for template in status_iterator(files, __('reading templates... '), "purple",  # type: ignore  # NOQA
                                         len(files), self.app.verbosity):
-            with open(template, 'r', encoding='utf-8') as f:  # type: ignore
-                context = f.read()
-            for line, meth, msg in extract_translations(context):
-                origin = MsgOrigin(template, line)
-                self.catalogs['sphinx'].add(msg, origin)
+            try:
+                with open(template, 'r', encoding='utf-8') as f:  # type: ignore
+                    context = f.read()
+                for line, meth, msg in extract_translations(context):
+                    origin = MsgOrigin(template, line)
+                    self.catalogs['sphinx'].add(msg, origin)
+            except Exception as exc:
+                raise ThemeError('%s: %r' % (template, exc))
 
     def build(self, docnames, summary=None, method='update'):
         # type: (Iterable[unicode], unicode, unicode) -> None
@@ -268,7 +272,7 @@ class MessageCatalogBuilder(I18nBuilder):
             ctime = datetime.fromtimestamp(
                 timestamp, ltz).strftime('%Y-%m-%d %H:%M%z'),
         )
-        for textdomain, catalog in status_iterator(iteritems(self.catalogs),  # type: ignore
+        for textdomain, catalog in status_iterator(self.catalogs.items(),  # type: ignore
                                                    __("writing message catalogs... "),
                                                    "darkgreen", len(self.catalogs),
                                                    self.app.verbosity,
@@ -286,8 +290,7 @@ class MessageCatalogBuilder(I18nBuilder):
                 if self.config.gettext_location:
                     # generate "#: file1:line1\n#: file2:line2 ..."
                     output.write("#: %s\n" % "\n#: ".join(  # type: ignore
-                        "%s:%s" % (canon_path(
-                            safe_relpath(source, self.outdir)), line)
+                        "%s:%s" % (canon_path(relpath(source, self.outdir)), line)
                         for source, line, _ in positions))
                 if self.config.gettext_uuid:
                     # generate "# uuid1\n# uuid2\n ..."

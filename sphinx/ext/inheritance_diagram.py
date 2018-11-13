@@ -36,24 +36,25 @@ r"""
     :license: BSD, see LICENSE for details.
 """
 
+import builtins
 import inspect
 import re
 import sys
 from hashlib import md5
-from typing import TYPE_CHECKING
 
 from docutils import nodes
-from docutils.parsers.rst import Directive, directives
+from docutils.parsers.rst import directives
 from six import text_type
-from six.moves import builtins
 
 import sphinx
 from sphinx.ext.graphviz import render_dot_html, render_dot_latex, \
     render_dot_texinfo, figure_wrapper
 from sphinx.pycode import ModuleAnalyzer
 from sphinx.util import force_decode
+from sphinx.util.docutils import SphinxDirective
 
-if TYPE_CHECKING:
+if False:
+    # For type annotation
     from typing import Any, Dict, List, Tuple, Dict, Optional  # NOQA
     from sphinx.application import Sphinx  # NOQA
     from sphinx.environment import BuildEnvironment  # NOQA
@@ -76,7 +77,7 @@ def try_import(objname):
         __import__(objname)
         return sys.modules.get(objname)  # type: ignore
     except (ImportError, ValueError):  # ValueError,py27 -> ImportError,py3
-        matched = module_sig_re.match(objname)  # type: ignore
+        matched = module_sig_re.match(objname)
 
         if not matched:
             return None
@@ -87,7 +88,7 @@ def try_import(objname):
             return None
         try:
             __import__(modname)
-            return getattr(sys.modules.get(modname), attrname, None)
+            return getattr(sys.modules.get(modname), attrname, None)  # type: ignore
         except (ImportError, ValueError):  # ValueError,py27 -> ImportError,py3
             return None
 
@@ -128,7 +129,7 @@ class InheritanceException(Exception):
     pass
 
 
-class InheritanceGraph(object):
+class InheritanceGraph:
     """
     Given a list of classes, determines the set of classes that they inherit
     from all the way to the root "object", and then is able to generate a
@@ -239,7 +240,7 @@ class InheritanceGraph(object):
     def get_all_class_names(self):
         # type: () -> List[unicode]
         """Get all of the class names involved in the graph."""
-        return [fullname for (_, fullname, _, _) in self.class_info]  # type: ignore
+        return [fullname for (_, fullname, _, _) in self.class_info]
 
     # These are the default attrs for graphviz
     default_graph_attrs = {
@@ -322,7 +323,7 @@ class inheritance_diagram(nodes.General, nodes.Element):
     pass
 
 
-class InheritanceDiagram(Directive):
+class InheritanceDiagram(SphinxDirective):
     """
     Run when the inheritance_diagram directive is first encountered.
     """
@@ -341,9 +342,8 @@ class InheritanceDiagram(Directive):
         # type: () -> List[nodes.Node]
         node = inheritance_diagram()
         node.document = self.state.document
-        env = self.state.document.settings.env
         class_names = self.arguments[0].split()
-        class_role = env.get_domain('py').role('class')
+        class_role = self.env.get_domain('py').role('class')
         # Store the original content for use as a hash
         node['parts'] = self.options.get('parts', 0)
         node['content'] = ', '.join(class_names)
@@ -356,10 +356,10 @@ class InheritanceDiagram(Directive):
         # Create a graph starting with the list of classes
         try:
             graph = InheritanceGraph(
-                class_names, env.ref_context.get('py:module'),
+                class_names, self.env.ref_context.get('py:module'),
                 parts=node['parts'],
                 private_bases='private-bases' in self.options,
-                aliases=env.config.inheritance_alias,
+                aliases=self.config.inheritance_alias,
                 top_classes=node['top-classes'])
         except InheritanceException as err:
             return [node.document.reporter.warning(err.args[0],
@@ -370,7 +370,7 @@ class InheritanceDiagram(Directive):
         # references to real URLs later.  These nodes will eventually be
         # removed from the doctree after we're done with them.
         for name in graph.get_all_class_names():
-            refnodes, x = class_role(
+            refnodes, x = class_role(  # type: ignore
                 'class', ':class:`%s`' % name, name, 0, self.state)
             node.extend(refnodes)
         # Store the graph object so we can use it to generate the

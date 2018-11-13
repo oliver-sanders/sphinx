@@ -10,11 +10,9 @@
 """
 
 import re
-from typing import TYPE_CHECKING
 
 from docutils import nodes
-from docutils.parsers.rst import Directive, directives
-from six import iteritems
+from docutils.parsers.rst import directives
 
 from sphinx import addnodes, locale
 from sphinx.deprecation import DeprecatedDict, RemovedInSphinx30Warning
@@ -24,9 +22,11 @@ from sphinx.locale import _, __
 from sphinx.roles import XRefRole
 from sphinx.util import logging
 from sphinx.util.docfields import Field, GroupedField, TypedField
+from sphinx.util.docutils import SphinxDirective
 from sphinx.util.nodes import make_refnode
 
-if TYPE_CHECKING:
+if False:
+    # For type annotation
     from typing import Any, Dict, Iterable, Iterator, List, Tuple, Union  # NOQA
     from sphinx.application import Sphinx  # NOQA
     from sphinx.builders import Builder  # NOQA
@@ -113,7 +113,7 @@ def _pseudo_parse_arglist(signode, arglist):
 
 # This override allows our inline type specifiers to behave like :class: link
 # when it comes to handling "." and "~" prefixes.
-class PyXrefMixin(object):
+class PyXrefMixin:
     def make_xref(self,
                   rolename,                  # type: unicode
                   domain,                    # type: unicode
@@ -157,7 +157,7 @@ class PyXrefMixin(object):
             if split_contnode:
                 contnode = nodes.Text(sub_target)
 
-            if delims_re.match(sub_target):  # type: ignore
+            if delims_re.match(sub_target):
                 results.append(contnode or innernode(sub_target, sub_target))
             else:
                 results.append(self.make_xref(rolename, domain, sub_target,
@@ -167,7 +167,15 @@ class PyXrefMixin(object):
 
 
 class PyField(PyXrefMixin, Field):
-    pass
+    def make_xref(self, rolename, domain, target,
+                  innernode=nodes.emphasis, contnode=None, env=None):
+        # type: (unicode, unicode, unicode, nodes.Node, nodes.Node, BuildEnvironment) ->  nodes.Node  # NOQA
+        if rolename == 'class' and target == 'None':
+            # None is not a type, so use obj role instead.
+            rolename = 'obj'
+
+        return super(PyField, self).make_xref(rolename, domain, target,
+                                              innernode, contnode, env)
 
 
 class PyGroupedField(PyXrefMixin, GroupedField):
@@ -175,7 +183,15 @@ class PyGroupedField(PyXrefMixin, GroupedField):
 
 
 class PyTypedField(PyXrefMixin, TypedField):
-    pass
+    def make_xref(self, rolename, domain, target,
+                  innernode=nodes.emphasis, contnode=None, env=None):
+        # type: (unicode, unicode, unicode, nodes.Node, nodes.Node, BuildEnvironment) ->  nodes.Node  # NOQA
+        if rolename == 'class' and target == 'None':
+            # None is not a type, so use obj role instead.
+            rolename = 'obj'
+
+        return super(PyTypedField, self).make_xref(rolename, domain, target,
+                                                   innernode, contnode, env)
 
 
 class PyObject(ObjectDescription):
@@ -236,7 +252,7 @@ class PyObject(ObjectDescription):
         * it is stripped from the displayed name if present
         * it is added to the full name (return value) if not present
         """
-        m = py_sig_re.match(sig)  # type: ignore
+        m = py_sig_re.match(sig)
         if m is None:
             raise ValueError
         name_prefix, name, arglist, retann = m.groups()
@@ -519,7 +535,7 @@ class PyClassmember(PyObject):
             return ''
 
 
-class PyDecoratorMixin(object):
+class PyDecoratorMixin:
     """
     Mixin for decorator directives.
     """
@@ -555,7 +571,7 @@ class PyDecoratorMethod(PyDecoratorMixin, PyClassmember):
         return PyClassmember.run(self)
 
 
-class PyModule(Directive):
+class PyModule(SphinxDirective):
     """
     Directive to mark description of a new module.
     """
@@ -573,18 +589,18 @@ class PyModule(Directive):
 
     def run(self):
         # type: () -> List[nodes.Node]
-        env = self.state.document.settings.env
         modname = self.arguments[0].strip()
         noindex = 'noindex' in self.options
-        env.ref_context['py:module'] = modname
+        self.env.ref_context['py:module'] = modname
         ret = []
         if not noindex:
-            env.domaindata['py']['modules'][modname] = \
-                (env.docname, self.options.get('synopsis', ''),
-                 self.options.get('platform', ''), 'deprecated' in self.options)
+            self.env.domaindata['py']['modules'][modname] = (self.env.docname,
+                                                             self.options.get('synopsis', ''),
+                                                             self.options.get('platform', ''),
+                                                             'deprecated' in self.options)
             # make a duplicate entry in 'objects' to facilitate searching for
             # the module in PythonDomain.find_obj()
-            env.domaindata['py']['objects'][modname] = (env.docname, 'module')
+            self.env.domaindata['py']['objects'][modname] = (self.env.docname, 'module')
             targetnode = nodes.target('', '', ids=['module-' + modname],
                                       ismod=True)
             self.state.document.note_explicit_target(targetnode)
@@ -598,7 +614,7 @@ class PyModule(Directive):
         return ret
 
 
-class PyCurrentModule(Directive):
+class PyCurrentModule(SphinxDirective):
     """
     This directive is just to tell Sphinx that we're documenting
     stuff in module foo, but links to module foo won't lead here.
@@ -612,12 +628,11 @@ class PyCurrentModule(Directive):
 
     def run(self):
         # type: () -> List[nodes.Node]
-        env = self.state.document.settings.env
         modname = self.arguments[0].strip()
         if modname == 'None':
-            env.ref_context.pop('py:module', None)
+            self.env.ref_context.pop('py:module', None)
         else:
-            env.ref_context['py:module'] = modname
+            self.env.ref_context['py:module'] = modname
         return []
 
 
@@ -661,7 +676,7 @@ class PythonModuleIndex(Index):
         ignores = self.domain.env.config['modindex_common_prefix']  # type: ignore
         ignores = sorted(ignores, key=len, reverse=True)
         # list of all modules, sorted by module name
-        modules = sorted(iteritems(self.domain.data['modules']),
+        modules = sorted(self.domain.data['modules'].items(),
                          key=lambda x: x[0].lower())
         # sort out collapsable modules
         prev_modname = ''
@@ -711,7 +726,7 @@ class PythonModuleIndex(Index):
         collapse = len(modules) - num_toplevels < num_toplevels
 
         # sort by first letter
-        sorted_content = sorted(iteritems(content))
+        sorted_content = sorted(content.items())
 
         return sorted_content, collapse
 
@@ -907,9 +922,9 @@ class PythonDomain(Domain):
 
     def get_objects(self):
         # type: () -> Iterator[Tuple[unicode, unicode, unicode, unicode, unicode, int]]
-        for modname, info in iteritems(self.data['modules']):
+        for modname, info in self.data['modules'].items():
             yield (modname, modname, 'module', info[0], 'module-' + modname, 0)
-        for refname, (docname, type) in iteritems(self.data['objects']):
+        for refname, (docname, type) in self.data['objects'].items():
             if type != 'module':  # modules are already handled
                 yield (refname, refname, type, docname, refname, 1)
 

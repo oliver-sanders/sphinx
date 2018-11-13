@@ -9,15 +9,18 @@
     :license: BSD, see LICENSE for details.
 """
 
-from typing import TYPE_CHECKING
+import warnings
 
 from docutils import nodes
 
-if TYPE_CHECKING:
+from sphinx.deprecation import RemovedInSphinx30Warning
+
+if False:
+    # For type annotation
     from typing import List, Sequence  # NOQA
 
 
-class translatable(object):
+class translatable:
     """Node which supports translation.
 
     The translation goes forward with following steps:
@@ -50,7 +53,7 @@ class translatable(object):
         raise NotImplementedError
 
 
-class not_smartquotable(object):
+class not_smartquotable:
     """A node which does not support smart-quotes."""
     support_smartquotes = False
 
@@ -182,6 +185,59 @@ class productionlist(nodes.Admonition, nodes.Element):
 
 class production(nodes.Part, nodes.Inline, nodes.FixedTextElement):
     """Node for a single grammar production rule."""
+
+
+# math nodes
+
+
+class math(nodes.math):
+    """Node for inline equations.
+
+    .. warning:: This node is provided to keep compatibility only.
+                 It will be removed in nearly future.  Don't use this from your extension.
+
+    .. deprecated:: 1.8
+       Use ``docutils.nodes.math`` instead.
+    """
+
+    def __getitem__(self, key):
+        """Special accessor for supporting ``node['latex']``."""
+        if key == 'latex' and 'latex' not in self.attributes:
+            warnings.warn("math node for Sphinx was replaced by docutils'. "
+                          "Therefore please use ``node.astext()`` to get an equation instead.",
+                          RemovedInSphinx30Warning, stacklevel=2)
+            return self.astext()
+        else:
+            return nodes.math.__getitem__(self, key)
+
+
+class math_block(nodes.math_block):
+    """Node for block level equations.
+
+    .. warning:: This node is provided to keep compatibility only.
+                 It will be removed in nearly future.  Don't use this from your extension.
+
+    .. deprecated:: 1.8
+    """
+
+    def __getitem__(self, key):
+        if key == 'latex' and 'latex' not in self.attributes:
+            warnings.warn("displaymath node for Sphinx was replaced by docutils'. "
+                          "Therefore please use ``node.astext()`` to get an equation instead.",
+                          RemovedInSphinx30Warning, stacklevel=2)
+            return self.astext()
+        else:
+            return nodes.math_block.__getitem__(self, key)
+
+
+class displaymath(math_block):
+    """Node for block level equations.
+
+    .. warning:: This node is provided to keep compatibility only.
+                 It will be removed in nearly future.  Don't use this from your extension.
+
+    .. deprecated:: 1.8
+    """
 
 
 # other directive-level nodes

@@ -11,20 +11,20 @@
     :license: BSD, see LICENSE for details.
 """
 
-import collections
 import inspect
 import re
+from collections.abc import Callable
 from functools import partial
-from typing import TYPE_CHECKING
 
-from six import string_types, u
-from six.moves import range
+from six import string_types
 
 from sphinx.ext.napoleon.iterators import modify_iter
+from sphinx.locale import _
 from sphinx.util.pycompat import UnicodeMixin
 
-if TYPE_CHECKING:
-    from typing import Any, Callable, Dict, List, Tuple, Union  # NOQA
+if False:
+    # For type annotation
+    from typing import Any, Dict, List, Tuple, Type, Union  # NOQA
     from sphinx.application import Sphinx  # NOQA
     from sphinx.config import Config as SphinxConfig  # NOQA
 
@@ -104,6 +104,10 @@ class GoogleDocstring(UnicodeMixin):
     <BLANKLINE>
 
     """
+
+    _name_rgx = re.compile(r"^\s*(:(?P<role>\w+):`(?P<name>[a-zA-Z0-9_.-]+)`|"
+                           r" (?P<name2>[a-zA-Z0-9_.-]+))\s*", re.X)
+
     def __init__(self, docstring, config=None, app=None, what='', name='',
                  obj=None, options=None):
         # type: (Union[unicode, List[unicode]], SphinxConfig, Sphinx, unicode, unicode, Any, Any) -> None  # NOQA
@@ -119,7 +123,7 @@ class GoogleDocstring(UnicodeMixin):
                 what = 'class'
             elif inspect.ismodule(obj):
                 what = 'module'
-            elif isinstance(obj, collections.Callable):  # type: ignore
+            elif isinstance(obj, Callable):
                 what = 'function'
             else:
                 what = 'object'
@@ -185,7 +189,7 @@ class GoogleDocstring(UnicodeMixin):
             Unicode version of the docstring.
 
         """
-        return u('\n').join(self.lines())
+        return '\n'.join(self.lines())
 
     def lines(self):
         # type: () -> List[unicode]
@@ -235,7 +239,7 @@ class GoogleDocstring(UnicodeMixin):
         _name, _type, _desc = before, '', after  # type: unicode, unicode, unicode
 
         if parse_type:
-            match = _google_typed_arg_regex.match(before)  # type: ignore
+            match = _google_typed_arg_regex.match(before)
             if match:
                 _name = match.group(1)
                 _type = match.group(2)
@@ -263,8 +267,9 @@ class GoogleDocstring(UnicodeMixin):
         # type: () -> Tuple[unicode, List[unicode]]
         line = next(self._line_iter)
         _type, colon, _desc = self._partition_field_on_colon(line)
-        if not colon:
+        if not colon or not _desc:
             _type, _desc = _desc, _type
+            _desc += colon
         _descs = [_desc] + self._dedent(self._consume_to_end())
         _descs = self.__class__(_descs, self._config).lines()
         return _type, _descs
@@ -495,9 +500,9 @@ class GoogleDocstring(UnicodeMixin):
         # type: (List[unicode]) -> bool
         if not lines:
             return False
-        if _bullet_list_regex.match(lines[0]):  # type: ignore
+        if _bullet_list_regex.match(lines[0]):
             return True
-        if _enumerated_list_regex.match(lines[0]):  # type: ignore
+        if _enumerated_list_regex.match(lines[0]):
             return True
         if len(lines) < 2 or lines[0].endswith('::'):
             return False
@@ -555,7 +560,14 @@ class GoogleDocstring(UnicodeMixin):
         self._parsed_lines = self._consume_empty()
 
         if self._name and (self._what == 'attribute' or self._what == 'data'):
-            self._parsed_lines.extend(self._parse_attribute_docstring())
+            # Implicit stop using StopIteration no longer allowed in
+            # Python 3.7; see PEP 479
+            res = []  # type: List[unicode]
+            try:
+                res = self._parse_attribute_docstring()
+            except StopIteration:
+                pass
+            self._parsed_lines.extend(res)
             return
 
         while self._line_iter.has_next():
@@ -564,7 +576,7 @@ class GoogleDocstring(UnicodeMixin):
                     section = self._consume_section_header()
                     self._is_in_section = True
                     self._section_indent = self._get_current_indent()
-                    if _directive_regex.match(section):  # type: ignore
+                    if _directive_regex.match(section):
                         lines = [section] + self._consume_to_next_section()
                     else:
                         lines = self._sections[section.lower()](section)
@@ -596,6 +608,7 @@ class GoogleDocstring(UnicodeMixin):
         lines = []
         for _name, _type, _desc in self._consume_fields():
             if self._config.napoleon_use_ivar:
+                _name = self._qualify_name(_name, self._obj)
                 field = ':ivar %s: ' % _name  # type: unicode
                 lines.extend(self._format_block(field, _desc))
                 if _type:
@@ -614,8 +627,13 @@ class GoogleDocstring(UnicodeMixin):
 
     def _parse_examples_section(self, section):
         # type: (unicode) -> List[unicode]
+        labels = {
+            'example': _('Example'),
+            'examples': _('Examples'),
+        }  # type: Dict[unicode, unicode]
         use_admonition = self._config.napoleon_use_admonition_for_examples
-        return self._parse_generic_section(section, use_admonition)
+        label = labels.get(section.lower(), section)
+        return self._parse_generic_section(label, use_admonition)
 
     def _parse_custom_generic_section(self, section):
         # for now, no admonition for simple custom sections
@@ -652,12 +670,12 @@ class GoogleDocstring(UnicodeMixin):
                 field_role="keyword",
                 type_role="kwtype")
         else:
-            return self._format_fields('Keyword Arguments', fields)
+            return self._format_fields(_('Keyword Arguments'), fields)
 
     def _parse_methods_section(self, section):
         # type: (unicode) -> List[unicode]
         lines = []  # type: List[unicode]
-        for _name, _, _desc in self._consume_fields(parse_type=False):
+        for _name, _type, _desc in self._consume_fields(parse_type=False):
             lines.append('.. method:: %s' % _name)
             if _desc:
                 lines.extend([u''] + self._indent(_desc, 3))
@@ -667,11 +685,11 @@ class GoogleDocstring(UnicodeMixin):
     def _parse_notes_section(self, section):
         # type: (unicode) -> List[unicode]
         use_admonition = self._config.napoleon_use_admonition_for_notes
-        return self._parse_generic_section('Notes', use_admonition)
+        return self._parse_generic_section(_('Notes'), use_admonition)
 
     def _parse_other_parameters_section(self, section):
         # type: (unicode) -> List[unicode]
-        return self._format_fields('Other Parameters', self._consume_fields())
+        return self._format_fields(_('Other Parameters'), self._consume_fields())
 
     def _parse_parameters_section(self, section):
         # type: (unicode) -> List[unicode]
@@ -679,51 +697,28 @@ class GoogleDocstring(UnicodeMixin):
         if self._config.napoleon_use_param:
             return self._format_docutils_params(fields)
         else:
-            return self._format_fields('Parameters', fields)
+            return self._format_fields(_('Parameters'), fields)
 
     def _parse_raises_section(self, section):
         # type: (unicode) -> List[unicode]
         fields = self._consume_fields(parse_type=False, prefer_type=True)
-        field_type = ':raises:'
-        padding = ' ' * len(field_type)
-        multi = len(fields) > 1
         lines = []  # type: List[unicode]
-        for _, _type, _desc in fields:
+        for _name, _type, _desc in fields:
+            m = self._name_rgx.match(_type).groupdict()
+            if m['role']:
+                _type = m['name']
+            _type = ' ' + _type if _type else ''
             _desc = self._strip_empty(_desc)
-            has_desc = any(_desc)
-            separator = has_desc and ' -- ' or ''
-            if _type:
-                has_refs = '`' in _type or ':' in _type
-                has_space = any(c in ' \t\n\v\f ' for c in _type)
-
-                if not has_refs and not has_space:
-                    _type = ':exc:`%s`%s' % (_type, separator)
-                elif has_desc and has_space:
-                    _type = '*%s*%s' % (_type, separator)
-                else:
-                    _type = '%s%s' % (_type, separator)
-
-                if has_desc:
-                    field = [_type + _desc[0]] + _desc[1:]
-                else:
-                    field = [_type]
-            else:
-                field = _desc
-            if multi:
-                if lines:
-                    lines.extend(self._format_block(padding + ' * ', field))
-                else:
-                    lines.extend(self._format_block(field_type + ' * ', field))
-            else:
-                lines.extend(self._format_block(field_type + ' ', field))
-        if lines and lines[-1]:
+            _descs = ' ' + '\n    '.join(_desc) if any(_desc) else ''
+            lines.append(':raises%s:%s' % (_type, _descs))
+        if lines:
             lines.append('')
         return lines
 
     def _parse_references_section(self, section):
         # type: (unicode) -> List[unicode]
         use_admonition = self._config.napoleon_use_admonition_for_references
-        return self._parse_generic_section('References', use_admonition)
+        return self._parse_generic_section(_('References'), use_admonition)
 
     def _parse_returns_section(self, section):
         # type: (unicode) -> List[unicode]
@@ -760,20 +755,20 @@ class GoogleDocstring(UnicodeMixin):
 
     def _parse_warns_section(self, section):
         # type: (unicode) -> List[unicode]
-        return self._format_fields('Warns', self._consume_fields())
+        return self._format_fields(_('Warns'), self._consume_fields())
 
     def _parse_yields_section(self, section):
         # type: (unicode) -> List[unicode]
         fields = self._consume_returns_section()
-        return self._format_fields('Yields', fields)
+        return self._format_fields(_('Yields'), fields)
 
     def _partition_field_on_colon(self, line):
         # type: (unicode) -> Tuple[unicode, unicode, unicode]
         before_colon = []
         after_colon = []
-        colon = ''
+        colon = ''  # type: unicode
         found_colon = False
-        for i, source in enumerate(_xref_regex.split(line)):  # type: ignore
+        for i, source in enumerate(_xref_regex.split(line)):
             if found_colon:
                 after_colon.append(source)
             else:
@@ -789,6 +784,18 @@ class GoogleDocstring(UnicodeMixin):
         return ("".join(before_colon).strip(),
                 colon,
                 "".join(after_colon).strip())
+
+    def _qualify_name(self, attr_name, klass):
+        # type: (unicode, Type) -> unicode
+        if klass and '.' not in attr_name:
+            if attr_name.startswith('~'):
+                attr_name = attr_name[1:]
+            try:
+                q = klass.__qualname__
+            except AttributeError:
+                q = klass.__name__
+            return '~%s.%s' % (q, attr_name)
+        return attr_name
 
     def _strip_empty(self, lines):
         # type: (List[unicode]) -> List[unicode]
@@ -955,16 +962,13 @@ class NumpyDocstring(GoogleDocstring):
         section, underline = self._line_iter.peek(2)
         section = section.lower()
         if section in self._sections and isinstance(underline, string_types):
-            return bool(_numpy_section_regex.match(underline))  # type: ignore
+            return bool(_numpy_section_regex.match(underline))
         elif self._directive_sections:
             if _directive_regex.match(section):
                 for directive_section in self._directive_sections:
                     if section.startswith(directive_section):
                         return True
         return False
-
-    _name_rgx = re.compile(r"^\s*(:(?P<role>\w+):`(?P<name>[a-zA-Z0-9_.-]+)`|"
-                           r" (?P<name2>[a-zA-Z0-9_.-]+))\s*", re.X)
 
     def _parse_see_also_section(self, section):
         # type: (unicode) -> List[unicode]
@@ -992,7 +996,7 @@ class NumpyDocstring(GoogleDocstring):
         def parse_item_name(text):
             # type: (unicode) -> Tuple[unicode, unicode]
             """Match ':role:`name`' or 'name'"""
-            m = self._name_rgx.match(text)  # type: ignore
+            m = self._name_rgx.match(text)
             if m:
                 g = m.groups()
                 if g[1] is None:
@@ -1016,7 +1020,7 @@ class NumpyDocstring(GoogleDocstring):
             if not line.strip():
                 continue
 
-            m = self._name_rgx.match(line)  # type: ignore
+            m = self._name_rgx.match(line)
             if m and line[m.end():].strip().startswith(':'):
                 push_item(current_func, rest)
                 current_func, line = line[:m.end()], line[m.end():]

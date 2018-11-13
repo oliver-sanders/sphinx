@@ -20,13 +20,11 @@
 from __future__ import print_function
 
 import argparse
-import codecs
 import locale
 import os
 import pydoc
 import re
 import sys
-from typing import TYPE_CHECKING
 
 from jinja2 import FileSystemLoader, TemplateNotFound
 from jinja2.sandbox import SandboxedEnvironment
@@ -42,15 +40,17 @@ from sphinx.util.inspect import safe_getattr
 from sphinx.util.osutil import ensuredir
 from sphinx.util.rst import escape as rst_escape
 
-if TYPE_CHECKING:
-    from typing import Any, Callable, Dict, Tuple, List  # NOQA
+if False:
+    # For type annotation
+    from typing import Any, Callable, Dict, List, Tuple, Type  # NOQA
     from jinja2 import BaseLoader  # NOQA
     from sphinx import addnodes  # NOQA
     from sphinx.builders import Builder  # NOQA
     from sphinx.environment import BuildEnvironment  # NOQA
+    from sphinx.ext.autodoc import Documenter  # NOQA
 
 
-class DummyApplication(object):
+class DummyApplication:
     """Dummy Application class for sphinx-autogen command."""
 
     def __init__(self):
@@ -69,7 +69,7 @@ def setup_documenters(app):
         ModuleDocumenter, ClassDocumenter, ExceptionDocumenter, DataDocumenter,
         FunctionDocumenter, MethodDocumenter, AttributeDocumenter,
         InstanceAttributeDocumenter
-    ]
+    ]  # type: List[Type[Documenter]]
     for documenter in documenters:
         app.registry.add_documenter(documenter.objtype, documenter)
 
@@ -124,7 +124,7 @@ def generate_autosummary_docs(sources, output_dir=None, suffix='.rst',
     else:
         if template_dir:
             template_dirs.insert(0, template_dir)
-        template_loader = FileSystemLoader(template_dirs)  # type: ignore
+        template_loader = FileSystemLoader(template_dirs)
     template_env = SandboxedEnvironment(loader=template_loader)
     template_env.filters['underline'] = _underline
 
@@ -203,6 +203,8 @@ def generate_autosummary_docs(sources, output_dir=None, suffix='.rst',
                     get_members(obj, 'exception', imported=imported_members)
             elif doc.objtype == 'class':
                 ns['members'] = dir(obj)
+                ns['inherited_members'] = \
+                    set(dir(obj)) - set(obj.__dict__.keys())
                 ns['methods'], ns['all_methods'] = \
                     get_members(obj, 'method', ['__init__'])
                 ns['attributes'], ns['all_attributes'] = \
@@ -246,8 +248,8 @@ def find_autosummary_in_files(filenames):
     """
     documented = []  # type: List[Tuple[unicode, unicode, unicode]]
     for filename in filenames:
-        with codecs.open(filename, 'r', encoding='utf-8',  # type: ignore
-                         errors='ignore') as f:
+        with open(filename, 'r', encoding='utf-8',  # type: ignore
+                  errors='ignore') as f:
             lines = f.read().splitlines()
             documented.extend(find_autosummary_in_lines(lines, filename=filename))
     return documented
@@ -267,7 +269,7 @@ def find_autosummary_in_docstring(name, module=None, filename=None):
         pass
     except ImportError as e:
         print("Failed to import '%s': %s" % (name, e))
-    except SystemExit as e:
+    except SystemExit:
         print("Failed to import '%s'; the module executes module level "
               "statement and it might call sys.exit()." % name)
     return []
@@ -300,11 +302,11 @@ def find_autosummary_in_lines(lines, module=None, filename=None):
     template = None
     current_module = module
     in_autosummary = False
-    base_indent = ""
+    base_indent = ""  # type: unicode
 
     for line in lines:
         if in_autosummary:
-            m = toctree_arg_re.match(line)  # type: ignore
+            m = toctree_arg_re.match(line)
             if m:
                 toctree = m.group(1)
                 if filename:
@@ -312,7 +314,7 @@ def find_autosummary_in_lines(lines, module=None, filename=None):
                                            toctree)
                 continue
 
-            m = template_arg_re.match(line)  # type: ignore
+            m = template_arg_re.match(line)
             if m:
                 template = m.group(1).strip()
                 continue
@@ -320,7 +322,7 @@ def find_autosummary_in_lines(lines, module=None, filename=None):
             if line.strip().startswith(':'):
                 continue  # skip options
 
-            m = autosummary_item_re.match(line)  # type: ignore
+            m = autosummary_item_re.match(line)
             if m:
                 name = m.group(1).strip()
                 if name.startswith('~'):
@@ -336,7 +338,7 @@ def find_autosummary_in_lines(lines, module=None, filename=None):
 
             in_autosummary = False
 
-        m = autosummary_re.match(line)  # type: ignore
+        m = autosummary_re.match(line)
         if m:
             in_autosummary = True
             base_indent = m.group(1)
@@ -344,7 +346,7 @@ def find_autosummary_in_lines(lines, module=None, filename=None):
             template = None
             continue
 
-        m = automodule_re.search(line)  # type: ignore
+        m = automodule_re.search(line)
         if m:
             current_module = m.group(1).strip()
             # recurse into the automodule docstring
@@ -352,7 +354,7 @@ def find_autosummary_in_lines(lines, module=None, filename=None):
                 current_module, filename=filename))
             continue
 
-        m = module_re.match(line)  # type: ignore
+        m = module_re.match(line)
         if m:
             current_module = m.group(2)
             continue

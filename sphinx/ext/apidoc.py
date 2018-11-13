@@ -24,18 +24,16 @@ import os
 import sys
 from fnmatch import fnmatch
 from os import path
-from typing import TYPE_CHECKING
-
-from six import binary_type
 
 import sphinx.locale
 from sphinx import __display_version__, package_dir
 from sphinx.cmd.quickstart import EXTENSIONS
 from sphinx.locale import __
 from sphinx.util import rst
-from sphinx.util.osutil import FileAvoidWrite, ensuredir, walk
+from sphinx.util.osutil import FileAvoidWrite, ensuredir
 
-if TYPE_CHECKING:
+if False:
+    # For type annotation
     from typing import Any, List, Tuple  # NOQA
 
 # automodule options
@@ -197,16 +195,16 @@ def shall_skip(module, opts, excludes=[]):
     if not opts.implicit_namespaces and not path.exists(module):
         return True
 
-    # skip it if there is nothing (or just \n or \r\n) in the file
-    if path.exists(module) and path.getsize(module) <= 2:
-        if os.path.basename(module) == '__init__.py':
-            # We only want to skip packages if they do not contain any
-            # .py files other than __init__.py.
-            basemodule = path.dirname(module)
-            for module in glob.glob(path.join(basemodule, '*.py')):
-                if not is_excluded(path.join(basemodule, module), excludes):
-                    return True
-        else:
+    # Are we a package (here defined as __init__.py, not the folder in itself)
+    if os.path.basename(module) == INITPY:
+        # Yes, check if we have any non-excluded modules at all here
+        all_skipped = True
+        basemodule = path.dirname(module)
+        for submodule in glob.glob(path.join(basemodule, '*.py')):
+            if not is_excluded(path.join(basemodule, submodule), excludes):
+                # There's a non-excluded module here, we won't skip
+                all_skipped = False
+        if all_skipped:
             return True
 
     # skip if it has a "private" name and this is selected
@@ -235,7 +233,7 @@ def recurse_tree(rootpath, excludes, opts):
         root_package = None
 
     toplevels = []
-    for root, subs, files in walk(rootpath, followlinks=followlinks):
+    for root, subs, files in os.walk(rootpath, followlinks=followlinks):
         # document only Python module files (that aren't excluded)
         py_files = sorted(f for f in files
                           if path.splitext(f)[1] in PY_SUFFIXES and
@@ -298,7 +296,7 @@ def is_excluded(root, excludes):
 def get_parser():
     # type: () -> argparse.ArgumentParser
     parser = argparse.ArgumentParser(
-        usage='usage: %(prog)s [OPTIONS] -o <OUTPUT_PATH> <MODULE_PATH> '
+        usage='%(prog)s [OPTIONS] -o <OUTPUT_PATH> <MODULE_PATH> '
               '[EXCLUDE_PATTERN, ...]',
         epilog=__('For more information, visit <http://sphinx-doc.org/>.'),
         description=__("""
@@ -340,7 +338,9 @@ Note: By default this script will not overwrite already created files."""))
     parser.add_argument('-P', '--private', action='store_true',
                         dest='includeprivate',
                         help=__('include "_private" modules'))
-    parser.add_argument('-T', '--no-toc', action='store_true', dest='notoc',
+    parser.add_argument('--tocfile', action='store', dest='tocfile', default='modules',
+                        help=__("don't create a table of contents file"))
+    parser.add_argument('-T', '--no-toc', action='store_false', dest='tocfile',
                         help=__("don't create a table of contents file"))
     parser.add_argument('-E', '--no-headings', action='store_true',
                         dest='noheadings',
@@ -442,19 +442,10 @@ def main(argv=sys.argv[1:]):
         if args.extensions:
             d['extensions'].extend(args.extensions)
 
-        if isinstance(args.header, binary_type):
-            d['project'] = d['project'].decode('utf-8')
-        if isinstance(args.author, binary_type):
-            d['author'] = d['author'].decode('utf-8')
-        if isinstance(args.version, binary_type):
-            d['version'] = d['version'].decode('utf-8')
-        if isinstance(args.release, binary_type):
-            d['release'] = d['release'].decode('utf-8')
-
         if not args.dryrun:
             qs.generate(d, silent=True, overwrite=args.force)
-    elif not args.notoc:
-        create_modules_toc_file(modules, args)
+    elif args.tocfile:
+        create_modules_toc_file(modules, args, args.tocfile)
 
     return 0
 

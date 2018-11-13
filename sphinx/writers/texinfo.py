@@ -12,11 +12,8 @@
 import re
 import textwrap
 from os import path
-from typing import TYPE_CHECKING
 
 from docutils import nodes, writers
-from six import itervalues
-from six.moves import range
 
 from sphinx import addnodes, __display_version__
 from sphinx.errors import ExtensionError
@@ -25,7 +22,8 @@ from sphinx.util import logging
 from sphinx.util.i18n import format_date
 from sphinx.writers.latex import collected_footnote
 
-if TYPE_CHECKING:
+if False:
+    # For type annotation
     from typing import Any, Callable, Dict, Iterator, List, Pattern, Set, Tuple, Union  # NOQA
     from sphinx.builders.texinfo import TexinfoBuilder  # NOQA
 
@@ -130,7 +128,7 @@ class TexinfoWriter(writers.Writer):
 
     def __init__(self, builder):
         # type: (TexinfoBuilder) -> None
-        writers.Writer.__init__(self)
+        super(TexinfoWriter, self).__init__()
         self.builder = builder
 
     def translate(self):
@@ -163,7 +161,7 @@ class TexinfoTranslator(nodes.NodeVisitor):
 
     def __init__(self, document, builder):
         # type: (nodes.Node, TexinfoBuilder) -> None
-        nodes.NodeVisitor.__init__(self, document)
+        super(TexinfoTranslator, self).__init__(document)
         self.builder = builder
         self.init_settings()
 
@@ -498,7 +496,7 @@ class TexinfoTranslator(nodes.NodeVisitor):
 
         indices_config = self.builder.config.texinfo_domain_indices
         if indices_config:
-            for domain in itervalues(self.builder.env.domains):
+            for domain in self.builder.env.domains.values():
                 for indexcls in domain.indices:
                     indexname = '%s-%s' % (domain.name, indexcls.name)
                     if isinstance(indices_config, list):
@@ -612,7 +610,7 @@ class TexinfoTranslator(nodes.NodeVisitor):
         node_name = node['node_name']
         pointers = tuple([node_name] + self.rellinks[node_name])
         self.body.append('\n@node %s,%s,%s,%s\n' % pointers)  # type: ignore
-        for id in self.next_section_ids:
+        for id in sorted(self.next_section_ids):
             self.add_anchor(id, node)
 
         self.next_section_ids.clear()
@@ -673,9 +671,11 @@ class TexinfoTranslator(nodes.NodeVisitor):
         except IndexError:
             rubric = self.rubrics[-1]
         self.body.append('\n%s ' % rubric)
+        self.escape_newlines += 1
 
     def depart_rubric(self, node):
         # type: (nodes.Node) -> None
+        self.escape_newlines -= 1
         self.body.append('\n\n')
 
     def visit_subtitle(self, node):
@@ -920,12 +920,14 @@ class TexinfoTranslator(nodes.NodeVisitor):
 
     def visit_citation(self, node):
         # type: (nodes.Node) -> None
+        self.body.append('\n')
         for id in node.get('ids'):
             self.add_anchor(id, node)
+        self.escape_newlines += 1
 
     def depart_citation(self, node):
         # type: (nodes.Node) -> None
-        pass
+        self.escape_newlines -= 1
 
     def visit_citation_reference(self, node):
         # type: (nodes.Node) -> None
@@ -1385,18 +1387,6 @@ class TexinfoTranslator(nodes.NodeVisitor):
         # type: (nodes.Node) -> None
         pass
 
-    def visit_substitution_reference(self, node):
-        # type: (nodes.Node) -> None
-        pass
-
-    def depart_substitution_reference(self, node):
-        # type: (nodes.Node) -> None
-        pass
-
-    def visit_substitution_definition(self, node):
-        # type: (nodes.Node) -> None
-        raise nodes.SkipNode
-
     def visit_system_message(self, node):
         # type: (nodes.Node) -> None
         self.body.append('\n@verbatim\n'
@@ -1544,14 +1534,6 @@ class TexinfoTranslator(nodes.NodeVisitor):
                                    for n in node.children[0].children) + '.')
         self.body.append('\n\n')
         raise nodes.SkipNode
-
-    def visit_highlightlang(self, node):
-        # type: (nodes.Node) -> None
-        pass
-
-    def depart_highlightlang(self, node):
-        # type: (nodes.Node) -> None
-        pass
 
     # -- Desc
 
@@ -1743,9 +1725,13 @@ class TexinfoTranslator(nodes.NodeVisitor):
 
     def visit_math(self, node):
         # type: (nodes.Node) -> None
-        logger.warning(__('using "math" markup without a Sphinx math extension '
-                          'active, please use one of the math extensions '
-                          'described at http://sphinx-doc.org/ext/math.html'))
+        self.body.append('@math{' + self.escape_arg(node.astext()) + '}')
         raise nodes.SkipNode
 
-    visit_math_block = visit_math
+    def visit_math_block(self, node):
+        # type: (nodes.Node) -> None
+        if node.get('label'):
+            self.add_anchor(node['label'], node)
+        self.body.append('\n\n@example\n%s\n@end example\n\n' %
+                         self.escape_arg(node.astext()))
+        raise nodes.SkipNode

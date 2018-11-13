@@ -10,19 +10,22 @@
 """
 from __future__ import print_function
 
-from typing import TYPE_CHECKING
+import re
+from io import BytesIO
+from zipfile import ZipFile
 
-from six import iteritems, BytesIO, StringIO
+from six import StringIO
 
 from sphinx.errors import PycodeError
 from sphinx.pycode.parser import Parser
 from sphinx.util import get_module_source, detect_encoding
 
-if TYPE_CHECKING:
+if False:
+    # For type annotation
     from typing import Any, Dict, IO, List, Tuple  # NOQA
 
 
-class ModuleAnalyzer(object):
+class ModuleAnalyzer:
     # cache for analyzer objects -- caches both by module and file name
     cache = {}  # type: Dict[Tuple[unicode, unicode], Any]
 
@@ -31,7 +34,7 @@ class ModuleAnalyzer(object):
         # type: (unicode, unicode, unicode) -> ModuleAnalyzer
         if isinstance(string, bytes):
             return cls(BytesIO(string), modname, srcname)
-        return cls(StringIO(string), modname, srcname, decoded=True)  # type: ignore
+        return cls(StringIO(string), modname, srcname, decoded=True)
 
     @classmethod
     def for_file(cls, filename, modname):
@@ -40,11 +43,25 @@ class ModuleAnalyzer(object):
             return cls.cache['file', filename]
         try:
             with open(filename, 'rb') as f:
-                obj = cls(f, modname, filename)  # type: ignore
+                obj = cls(f, modname, filename)
                 cls.cache['file', filename] = obj
         except Exception as err:
-            raise PycodeError('error opening %r' % filename, err)
+            if '.egg/' in filename:
+                obj = cls.cache['file', filename] = cls.for_egg(filename, modname)
+            else:
+                raise PycodeError('error opening %r' % filename, err)
         return obj
+
+    @classmethod
+    def for_egg(cls, filename, modname):
+        # type: (unicode, unicode) -> ModuleAnalyzer
+        eggpath, relpath = re.split('(?<=\\.egg)/', filename)
+        try:
+            with ZipFile(eggpath) as egg:
+                code = egg.read(relpath).decode('utf-8')
+                return cls.for_string(code, modname, filename)
+        except Exception as exc:
+            raise PycodeError('error opening %r' % filename, exc)
 
     @classmethod
     def for_module(cls, modname):
@@ -95,7 +112,7 @@ class ModuleAnalyzer(object):
             parser.parse()
 
             self.attr_docs = {}
-            for (scope, comment) in iteritems(parser.comments):
+            for (scope, comment) in parser.comments.items():
                 if comment:
                     self.attr_docs[scope] = comment.splitlines() + ['']
                 else:
@@ -121,23 +138,3 @@ class ModuleAnalyzer(object):
             self.parse()
 
         return self.tags
-
-
-if __name__ == '__main__':
-    import time
-    import pprint
-    x0 = time.time()
-    # ma = ModuleAnalyzer.for_file(__file__.rstrip('c'), 'sphinx.builders.html')
-    ma = ModuleAnalyzer.for_file('sphinx/environment.py',
-                                 'sphinx.environment')
-    ma.tokenize()  # type: ignore
-    x1 = time.time()
-    ma.parse()
-    x2 = time.time()
-    # for (ns, name), doc in iteritems(ma.find_attr_docs()):
-    #     print '>>', ns, name
-    #     print '\n'.join(doc)
-    pprint.pprint(ma.find_tags())
-    x3 = time.time()
-    # print nodes.nice_repr(ma.parsetree, number2name)
-    print("tokenizing %.4f, parsing %.4f, finding %.4f" % (x1 - x0, x2 - x1, x3 - x2))

@@ -14,18 +14,18 @@ import locale
 import warnings
 from collections import defaultdict
 from gettext import NullTranslations
-from typing import TYPE_CHECKING
 
 from six import text_type
 from six.moves import UserString
 
 from sphinx.deprecation import RemovedInSphinx30Warning
 
-if TYPE_CHECKING:
+if False:
+    # For type annotation
     from typing import Any, Callable, Dict, Iterator, List, Tuple  # NOQA
 
 
-class _TranslationProxy(UserString, object):
+class _TranslationProxy(UserString):
     """
     Class for proxy strings from gettext translations.  This is a helper for the
     lazy_* functions from this module.
@@ -36,7 +36,6 @@ class _TranslationProxy(UserString, object):
     This inherits from UserString because some docutils versions use UserString
     for their Text nodes, which then checks its argument for being either a
     basestring or UserString, otherwise calls str() -- not unicode() -- on it.
-    This also inherits from object to make the __new__ method work.
     """
     __slots__ = ('_func', '_args')
 
@@ -45,7 +44,7 @@ class _TranslationProxy(UserString, object):
         if not args:
             # not called with "function" and "arguments", but a plain string
             return text_type(func)
-        return object.__new__(cls)  # type: ignore
+        return object.__new__(cls)
 
     def __getnewargs__(self):
         # type: () -> Tuple
@@ -64,8 +63,8 @@ class _TranslationProxy(UserString, object):
     # replace function from UserString; it instantiates a self.__class__
     # for the encoding result
 
-    def encode(self, encoding=None, errors=None):
-        # type: (unicode, unicode) -> str
+    def encode(self, encoding=None, errors=None):  # type: ignore
+        # type: (unicode, unicode) -> bytes
         if encoding:
             if errors:
                 return self.data.encode(encoding, errors)
@@ -88,7 +87,7 @@ class _TranslationProxy(UserString, object):
         return dir(text_type)
 
     def __iter__(self):
-        # type: () -> Iterator[unicode]
+        # type: () -> Iterator
         return iter(self.data)
 
     def __len__(self):
@@ -103,15 +102,15 @@ class _TranslationProxy(UserString, object):
         # type: () -> unicode
         return text_type(self.data)
 
-    def __add__(self, other):
+    def __add__(self, other):  # type: ignore
         # type: (unicode) -> unicode
         return self.data + other
 
-    def __radd__(self, other):
+    def __radd__(self, other):  # type: ignore
         # type: (unicode) -> unicode
         return other + self.data
 
-    def __mod__(self, other):
+    def __mod__(self, other):  # type: ignore
         # type: (unicode) -> unicode
         return self.data % other
 
@@ -119,11 +118,11 @@ class _TranslationProxy(UserString, object):
         # type: (unicode) -> unicode
         return other % self.data
 
-    def __mul__(self, other):
+    def __mul__(self, other):  # type: ignore
         # type: (Any) -> unicode
         return self.data * other
 
-    def __rmul__(self, other):
+    def __rmul__(self, other):  # type: ignore
         # type: (Any) -> unicode
         return other * self.data
 
@@ -138,10 +137,6 @@ class _TranslationProxy(UserString, object):
     def __eq__(self, other):
         # type: (Any) -> bool
         return self.data == other
-
-    def __ne__(self, other):
-        # type: (Any) -> bool
-        return self.data != other
 
     def __gt__(self, other):
         # type: (unicode) -> bool
@@ -165,7 +160,7 @@ class _TranslationProxy(UserString, object):
         # type: (Tuple[Callable, Tuple[unicode]]) -> None
         self._func, self._args = tup
 
-    def __getitem__(self, key):
+    def __getitem__(self, key):  # type: ignore
         # type: (Any) -> unicode
         return self.data[key]
 
@@ -187,7 +182,7 @@ def mygettext(string):
     not bound yet at that time.
     """
     warnings.warn('sphinx.locale.mygettext() is deprecated.  Please use `_()` instead.',
-                  RemovedInSphinx30Warning)
+                  RemovedInSphinx30Warning, stacklevel=2)
     return _(string)
 
 
@@ -197,7 +192,7 @@ def lazy_gettext(string):
     # if isinstance(string, _TranslationProxy):
     #     return string
     warnings.warn('sphinx.locale.laxy_gettext() is deprecated.  Please use `_()` instead.',
-                  RemovedInSphinx30Warning)
+                  RemovedInSphinx30Warning, stacklevel=2)
     return _TranslationProxy(mygettext, string)  # type: ignore
 
 
@@ -253,7 +248,13 @@ def init_console(locale_dir, catalog):
 
     .. versionadded:: 1.8
     """
-    language, _ = locale.getlocale(locale.LC_MESSAGES)  # encoding is ignored
+    try:
+        # encoding is ignored
+        language, _ = locale.getlocale(locale.LC_MESSAGES)
+    except AttributeError:
+        # LC_MESSAGES is not always defined. Fallback to the default language
+        # in case it is not.
+        language = None
     return init([locale_dir], language, catalog, 'console')
 
 
@@ -326,7 +327,7 @@ __ = get_translation('sphinx', 'console')
 
 def l_(*args):
     warnings.warn('sphinx.locale.l_() is deprecated.  Please use `_()` instead.',
-                  RemovedInSphinx30Warning)
+                  RemovedInSphinx30Warning, stacklevel=2)
     return _(*args)
 
 

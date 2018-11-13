@@ -10,10 +10,8 @@
 """
 
 import re
-from typing import TYPE_CHECKING
 
 from docutils import nodes, utils
-from six import iteritems
 
 from sphinx import addnodes
 from sphinx.errors import SphinxError
@@ -22,7 +20,8 @@ from sphinx.util import ws_re
 from sphinx.util.nodes import split_explicit_title, process_index_entry, \
     set_role_source_info
 
-if TYPE_CHECKING:
+if False:
+    # For type annotation
     from typing import Any, Dict, List, Tuple, Type  # NOQA
     from docutils.parsers.rst.states import Inliner  # NOQA
     from sphinx.application import Sphinx  # NOQA
@@ -45,7 +44,7 @@ generic_docroles = {
 
 # -- generic cross-reference role ----------------------------------------------
 
-class XRefRole(object):
+class XRefRole:
     """
     A generic cross-referencing role.  To create a callable that can be used as
     a role function, create an instance of this class.
@@ -261,7 +260,7 @@ def menusel_role(typ, rawtext, text, lineno, inliner, options={}, content=[]):
     text = utils.unescape(text)
     if typ == 'menuselection':
         text = text.replace('-->', u'\N{TRIANGULAR BULLET}')
-    spans = _amp_re.split(text)  # type: ignore
+    spans = _amp_re.split(text)
 
     node = nodes.inline(rawtext=rawtext)
     for i, span in enumerate(spans):
@@ -284,6 +283,7 @@ def menusel_role(typ, rawtext, text, lineno, inliner, options={}, content=[]):
 
 
 _litvar_re = re.compile('{([^}]+)}')
+parens_re = re.compile(r'(\\*{|\\*})')
 
 
 def emph_literal_role(typ, rawtext, text, lineno, inliner,
@@ -296,17 +296,43 @@ def emph_literal_role(typ, rawtext, text, lineno, inliner,
     else:
         typ = typ.lower()
 
-    text = utils.unescape(text)
-    pos = 0
     retnode = nodes.literal(role=typ.lower(), classes=[typ])
-    for m in _litvar_re.finditer(text):  # type: ignore
-        if m.start() > pos:
-            txt = text[pos:m.start()]
-            retnode += nodes.Text(txt, txt)
-        retnode += nodes.emphasis(m.group(1), m.group(1))
-        pos = m.end()
-    if pos < len(text):
-        retnode += nodes.Text(text[pos:], text[pos:])
+    parts = list(parens_re.split(utils.unescape(text)))
+    stack = ['']
+    for part in parts:
+        matched = parens_re.match(part)
+        if matched:
+            backslashes = len(part) - 1
+            if backslashes % 2 == 1:    # escaped
+                stack[-1] += "\\" * int((backslashes - 1) / 2) + part[-1]
+            elif part[-1] == '{':       # rparen
+                stack[-1] += "\\" * int(backslashes / 2)
+                if len(stack) >= 2 and stack[-2] == "{":
+                    # nested
+                    stack[-1] += "{"
+                else:
+                    # start emphasis
+                    stack.append('{')
+                    stack.append('')
+            else:                       # lparen
+                stack[-1] += "\\" * int(backslashes / 2)
+                if len(stack) == 3 and stack[1] == "{" and len(stack[2]) > 0:
+                    # emphasized word found
+                    if stack[0]:
+                        retnode += nodes.Text(stack[0], stack[0])
+                    retnode += nodes.emphasis(stack[2], stack[2])
+                    stack = ['']
+                else:
+                    # emphasized word not found; the rparen is not a special symbol
+                    stack.append('}')
+                    stack = [''.join(stack)]
+        else:
+            stack[-1] += part
+    if ''.join(stack):
+        # remaining is treated as Text
+        text = ''.join(stack)
+        retnode += nodes.Text(text, text)
+
     return [retnode], []
 
 
@@ -316,7 +342,7 @@ _abbr_re = re.compile(r'\((.*)\)$', re.S)
 def abbr_role(typ, rawtext, text, lineno, inliner, options={}, content=[]):
     # type: (unicode, unicode, unicode, int, Inliner, Dict, List[unicode]) -> Tuple[List[nodes.Node], List[nodes.Node]]  # NOQA
     text = utils.unescape(text)
-    m = _abbr_re.search(text)  # type: ignore
+    m = _abbr_re.search(text)
     if m is None:
         return [addnodes.abbreviation(text, text, **options)], []
     abbr = text[:m.start()].strip()
@@ -376,12 +402,12 @@ def setup(app):
     # type: (Sphinx) -> Dict[unicode, Any]
     from docutils.parsers.rst import roles
 
-    for rolename, nodeclass in iteritems(generic_docroles):
+    for rolename, nodeclass in generic_docroles.items():
         generic = roles.GenericRole(rolename, nodeclass)
         role = roles.CustomRole(rolename, generic, {'classes': [rolename]})
         roles.register_local_role(rolename, role)
 
-    for rolename, func in iteritems(specific_docroles):
+    for rolename, func in specific_docroles.items():
         roles.register_local_role(rolename, func)
 
     return {

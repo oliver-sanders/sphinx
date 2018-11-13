@@ -10,9 +10,6 @@
 """
 
 import re
-from typing import TYPE_CHECKING
-
-from six import iteritems
 
 from sphinx import addnodes
 from sphinx.directives import ObjectDescription
@@ -21,7 +18,8 @@ from sphinx.locale import _
 from sphinx.roles import XRefRole
 from sphinx.util.nodes import make_refnode
 
-if TYPE_CHECKING:
+if False:
+    # For type annotation
     from typing import Any, Dict, Iterator, List, Tuple  # NOQA
     from docutils import nodes  # NOQA
     from sphinx.application import Sphinx  # NOQA
@@ -79,7 +77,7 @@ def parse_directive(d):
     if not dir.startswith('.'):
         # Assume it is a directive without syntax
         return (dir, '')
-    m = dir_sig_re.match(dir)  # type: ignore
+    m = dir_sig_re.match(dir)
     if not m:
         return (dir, '')
     parsed_dir, parsed_args = m.groups()
@@ -172,7 +170,7 @@ class ReSTDomain(Domain):
 
     def get_objects(self):
         # type: () -> Iterator[Tuple[unicode, unicode, unicode, unicode, unicode, int]]
-        for (typ, name), docname in iteritems(self.data['objects']):
+        for (typ, name), docname in self.data['objects'].items():
             yield name, name, typ, docname, typ + '-' + name, 1
 
 

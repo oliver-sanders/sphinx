@@ -12,7 +12,6 @@ from __future__ import absolute_import
 
 import re
 from contextlib import contextmanager
-from typing import TYPE_CHECKING
 
 from docutils.parsers.rst import roles
 from docutils.parsers.rst.languages import en as english
@@ -21,16 +20,17 @@ from docutils.utils import Reporter
 from sphinx.locale import __
 from sphinx.util import logging
 
-if TYPE_CHECKING:
+if False:
+    # For type annotation
     from typing import Generator  # NOQA
 
-symbols_re = re.compile(r'([!--/:-@\[-`{-~])')  # symbols without dot(0x2e)
+symbols_re = re.compile(r'([!-\-/:-@\[-`{-~])')  # symbols without dot(0x2e)
 logger = logging.getLogger(__name__)
 
 
 def escape(text):
     # type: (unicode) -> unicode
-    text = symbols_re.sub(r'\\\1', text)  # type: ignore
+    text = symbols_re.sub(r'\\\1', text)
     text = re.sub(r'^\.', r'\.', text)  # escape a dot at top
     return text
 

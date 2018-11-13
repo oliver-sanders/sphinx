@@ -9,27 +9,16 @@
     :license: BSD, see LICENSE for details.
 """
 
-import codecs
+import queue
 import re
 import socket
 import threading
+from html.parser import HTMLParser
 from os import path
-from typing import TYPE_CHECKING
+from urllib.parse import unquote
 
 from docutils import nodes
 from requests.exceptions import HTTPError
-from six.moves import queue, html_parser
-from six.moves.urllib.parse import unquote
-
-# 2015-06-25 barry@python.org.  This exception was deprecated in Python 3.3 and
-# removed in Python 3.5, however for backward compatibility reasons, we're not
-# going to just remove it.  If it doesn't exist, define an exception that will
-# never be caught but leaves the code in check_anchor() intact.
-try:
-    from six.moves.html_parser import HTMLParseError  # type: ignore
-except ImportError:
-    class HTMLParseError(Exception):  # type: ignore
-        pass
 
 from sphinx.builders import Builder
 from sphinx.locale import __
@@ -39,7 +28,8 @@ from sphinx.util.console import (  # type: ignore
 )
 from sphinx.util.requests import is_ssl_error
 
-if TYPE_CHECKING:
+if False:
+    # For type annotation
     from typing import Any, Dict, List, Set, Tuple, Union  # NOQA
     from sphinx.application import Sphinx  # NOQA
     from sphinx.util.requests.requests import Response  # NOQA
@@ -48,12 +38,12 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class AnchorCheckParser(html_parser.HTMLParser):
+class AnchorCheckParser(HTMLParser):
     """Specialized HTML parser that looks for a specific anchor."""
 
     def __init__(self, search_anchor):
         # type: (unicode) -> None
-        html_parser.HTMLParser.__init__(self)
+        super(AnchorCheckParser, self).__init__()
 
         self.search_anchor = search_anchor
         self.found = False
@@ -72,18 +62,13 @@ def check_anchor(response, anchor):
     Returns True if anchor was found, False otherwise.
     """
     parser = AnchorCheckParser(anchor)
-    try:
-        # Read file in chunks. If we find a matching anchor, we break
-        # the loop early in hopes not to have to download the whole thing.
-        for chunk in response.iter_content(chunk_size=4096, decode_unicode=True):
-            parser.feed(chunk)
-            if parser.found:
-                break
-        parser.close()
-    except HTMLParseError:
-        # HTMLParser is usually pretty good with sloppy HTML, but it tends to
-        # choke on EOF. But we're done then anyway.
-        pass
+    # Read file in chunks. If we find a matching anchor, we break
+    # the loop early in hopes not to have to download the whole thing.
+    for chunk in response.iter_content(chunk_size=4096, decode_unicode=True):
+        parser.feed(chunk)
+        if parser.found:
+            break
+    parser.close()
     return parser.found
 
 
@@ -120,11 +105,14 @@ class CheckExternalLinksBuilder(Builder):
 
     def check_thread(self):
         # type: () -> None
-        kwargs = {}
+        kwargs = {
+            'allow_redirects': True,
+            'headers': {
+                'Accept': 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8'
+            },
+        }
         if self.app.config.linkcheck_timeout:
             kwargs['timeout'] = self.app.config.linkcheck_timeout
-
-        kwargs['allow_redirects'] = True
 
         def check_uri():
             # type: () -> Tuple[unicode, unicode, int]
@@ -160,7 +148,7 @@ class CheckExternalLinksBuilder(Builder):
                         # the server and the network
                         response = requests.head(req_url, config=self.app.config, **kwargs)
                         response.raise_for_status()
-                    except HTTPError as err:
+                    except HTTPError:
                         # retry with GET request if that fails, some servers
                         # don't like HEAD requests.
                         response = requests.get(req_url, stream=True, config=self.app.config,
@@ -305,7 +293,8 @@ class CheckExternalLinksBuilder(Builder):
 
     def write_entry(self, what, docname, line, uri):
         # type: (unicode, unicode, int, unicode) -> None
-        with codecs.open(path.join(self.outdir, 'output.txt'), 'a', 'utf-8') as output:  # type: ignore  # NOQA
+        with open(path.join(self.outdir, 'output.txt'), 'a',  # type: ignore
+                  encoding='utf-8') as output:
             output.write("%s:%s: [%s] %s\n" % (self.env.doc2path(docname, None),
                                                line, what, uri))
 

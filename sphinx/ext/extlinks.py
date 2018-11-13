@@ -24,15 +24,13 @@
     :license: BSD, see LICENSE for details.
 """
 
-from typing import TYPE_CHECKING
-
 from docutils import nodes, utils
-from six import iteritems
 
 import sphinx
 from sphinx.util.nodes import split_explicit_title
 
-if TYPE_CHECKING:
+if False:
+    # For type annotation
     from typing import Any, Dict, List, Tuple  # NOQA
     from docutils.parsers.rst.states import Inliner  # NOQA
     from sphinx.application import Sphinx  # NOQA
@@ -65,7 +63,7 @@ def make_link_role(base_url, prefix):
 
 def setup_link_roles(app):
     # type: (Sphinx) -> None
-    for name, (base_url, prefix) in iteritems(app.config.extlinks):
+    for name, (base_url, prefix) in app.config.extlinks.items():
         app.add_role(name, make_link_role(base_url, prefix))
 
 

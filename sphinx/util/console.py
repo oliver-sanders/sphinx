@@ -8,12 +8,10 @@
     :copyright: Copyright 2007-2018 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
-from __future__ import absolute_import
 
 import os
 import re
 import sys
-from typing import TYPE_CHECKING
 
 try:
     # check if colorama is installed to support color on Windows
@@ -21,7 +19,8 @@ try:
 except ImportError:
     colorama = None
 
-if TYPE_CHECKING:
+if False:
+    # For type annotation
     from typing import Dict  # NOQA
 
 
@@ -88,9 +87,21 @@ def coloron():
     codes.update(_orig_codes)
 
 
-def colorize(name, text):
-    # type: (str, unicode) -> unicode
-    return codes.get(name, '') + text + codes.get('reset', '')
+def colorize(name, text, input_mode=False):
+    # type: (str, unicode, bool) -> unicode
+    def escseq(name):
+        # Wrap escape sequence with ``\1`` and ``\2`` to let readline know
+        # it is non-printable characters
+        # ref: https://tiswww.case.edu/php/chet/readline/readline.html
+        #
+        # Note: This hack does not work well in Windows (see #5059)
+        escape = codes.get(name, '')
+        if input_mode and escape and sys.platform != 'win32':
+            return '\1' + escape + '\2'
+        else:
+            return escape
+
+    return escseq(name) + text + escseq('reset')
 
 
 def strip_colors(s):

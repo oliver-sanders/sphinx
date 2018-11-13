@@ -11,7 +11,6 @@
 
 import re
 import string
-from typing import TYPE_CHECKING
 
 from docutils import nodes
 
@@ -23,7 +22,8 @@ from sphinx.roles import XRefRole
 from sphinx.util.docfields import Field, TypedField
 from sphinx.util.nodes import make_refnode
 
-if TYPE_CHECKING:
+if False:
+    # For type annotation
     from typing import Any, Dict, Iterator, List, Tuple  # NOQA
     from sphinx.application import Sphinx  # NOQA
     from sphinx.builders import Builder  # NOQA
@@ -83,7 +83,7 @@ class CObject(ObjectDescription):
     def _parse_type(self, node, ctype):
         # type: (nodes.Node, unicode) -> None
         # add cross-ref nodes for all words
-        for part in [_f for _f in wsplit_re.split(ctype) if _f]:  # type: ignore
+        for part in [_f for _f in wsplit_re.split(ctype) if _f]:
             tnode = nodes.Text(part, part)
             if part[0] in string.ascii_letters + '_' and \
                part not in self.stopwords:
@@ -98,10 +98,10 @@ class CObject(ObjectDescription):
     def _parse_arglist(self, arglist):
         # type: (unicode) -> Iterator[unicode]
         while True:
-            m = c_funcptr_arg_sig_re.match(arglist)  # type: ignore
+            m = c_funcptr_arg_sig_re.match(arglist)
             if m:
                 yield m.group()
-                arglist = c_funcptr_arg_sig_re.sub('', arglist)  # type: ignore
+                arglist = c_funcptr_arg_sig_re.sub('', arglist)
                 if ',' in arglist:
                     _, arglist = arglist.split(',', 1)
                 else:
@@ -118,9 +118,9 @@ class CObject(ObjectDescription):
         # type: (unicode, addnodes.desc_signature) -> unicode
         """Transform a C signature into RST nodes."""
         # first try the function pointer signature regex, it's more specific
-        m = c_funcptr_sig_re.match(sig)  # type: ignore
+        m = c_funcptr_sig_re.match(sig)
         if m is None:
-            m = c_sig_re.match(sig)  # type: ignore
+            m = c_sig_re.match(sig)
         if m is None:
             raise ValueError('no match')
         rettype, name, arglist, const = m.groups()
@@ -147,7 +147,8 @@ class CObject(ObjectDescription):
             fullname = name
 
         if not arglist:
-            if self.objtype == 'function':
+            if self.objtype == 'function' or \
+                    self.objtype == 'macro' and sig.rstrip().endswith('()'):
                 # for functions, add an empty parameter list
                 signode += addnodes.desc_parameterlist()
             if const:
@@ -161,7 +162,7 @@ class CObject(ObjectDescription):
             arg = arg.strip()
             param = addnodes.desc_parameter('', '', noemph=True)
             try:
-                m = c_funcptr_arg_sig_re.match(arg)  # type: ignore
+                m = c_funcptr_arg_sig_re.match(arg)
                 if m:
                     self._parse_type(param, m.group(1) + '(')
                     param += nodes.emphasis(m.group(2), m.group(2))

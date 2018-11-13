@@ -17,37 +17,39 @@ import os
 import re
 import sys
 import time
+import warnings
 from collections import OrderedDict
-from io import open
 from os import path
-from typing import TYPE_CHECKING
+from urllib.parse import quote
 
 # try to import readline, unix specific enhancement
 try:
     import readline
     if readline.__doc__ and 'libedit' in readline.__doc__:
         readline.parse_and_bind("bind ^I rl_complete")
+        USE_LIBEDIT = True
     else:
         readline.parse_and_bind("tab: complete")
+        USE_LIBEDIT = False
 except ImportError:
-    pass
+    USE_LIBEDIT = False
 
 from docutils.utils import column_width
-from six import PY2, PY3, text_type, binary_type
-from six.moves import input
-from six.moves.urllib.parse import quote as urlquote
+from six import text_type
 
 import sphinx.locale
 from sphinx import __display_version__, package_dir
+from sphinx.deprecation import RemovedInSphinx40Warning
 from sphinx.locale import __
 from sphinx.util import texescape
 from sphinx.util.console import (  # type: ignore
-    purple, bold, red, turquoise, nocolor, color_terminal
+    colorize, bold, red, turquoise, nocolor, color_terminal
 )
 from sphinx.util.osutil import ensuredir, make_filename
 from sphinx.util.template import SphinxRenderer
 
-if TYPE_CHECKING:
+if False:
+    # For type annotation
     from typing import Any, Callable, Dict, List, Pattern, Union  # NOQA
 
 TERM_ENCODING = getattr(sys.stdin, 'encoding', None)
@@ -74,19 +76,30 @@ DEFAULTS = {
     'language': None,
     'suffix': '.rst',
     'master': 'index',
-    'epub': False,
     'makefile': True,
     'batchfile': True,
 }
 
 PROMPT_PREFIX = '> '
 
+if sys.platform == 'win32':
+    # On Windows, show questions as bold because of color scheme of PowerShell (refs: #5294).
+    COLOR_QUESTION = 'bold'
+else:
+    COLOR_QUESTION = 'purple'
+
 
 # function to get input from terminal -- overridden by the test suite
 def term_input(prompt):
     # type: (unicode) -> unicode
-    print(prompt, end='')
-    return input('')
+    if sys.platform == 'win32':
+        # Important: On windows, readline is not enabled by default.  In these
+        #            environment, escape sequences have been broken.  To avoid the
+        #            problem, quickstart uses ``print()`` to show prompt.
+        print(prompt, end='')
+        return input('')
+    else:
+        return input(prompt)
 
 
 class ValidationError(Exception):
@@ -172,21 +185,13 @@ def do_prompt(text, default=None, validator=nonempty):
             prompt = PROMPT_PREFIX + '%s [%s]: ' % (text, default)  # type: unicode
         else:
             prompt = PROMPT_PREFIX + text + ': '
-        if PY2:
-            # for Python 2.x, try to get a Unicode string out of it
-            if prompt.encode('ascii', 'replace').decode('ascii', 'replace') \
-                    != prompt:
-                if TERM_ENCODING:
-                    prompt = prompt.encode(TERM_ENCODING)
-                else:
-                    print(turquoise(__('* Note: non-ASCII default value provided '
-                                       'and terminal encoding unknown -- assuming '
-                                       'UTF-8 or Latin-1.')))
-                    try:
-                        prompt = prompt.encode('utf-8')
-                    except UnicodeEncodeError:
-                        prompt = prompt.encode('latin1')
-        prompt = purple(prompt)
+        if USE_LIBEDIT:
+            # Note: libedit has a problem for combination of ``input()`` and escape
+            # sequence (see #5335).  To avoid the problem, all prompts are not colored
+            # on libedit.
+            pass
+        else:
+            prompt = colorize(COLOR_QUESTION, prompt, input_mode=True)
         x = term_input(prompt).strip()
         if default and not x:
             x = default
@@ -203,10 +208,9 @@ def do_prompt(text, default=None, validator=nonempty):
 def convert_python_source(source, rex=re.compile(r"[uU]('.*?')")):
     # type: (unicode, Pattern) -> unicode
     # remove Unicode literal prefixes
-    if PY3:
-        return rex.sub('\\1', source)
-    else:
-        return source
+    warnings.warn('convert_python_source() is deprecated.',
+                  RemovedInSphinx40Warning)
+    return rex.sub('\\1', source)
 
 
 class QuickstartRenderer(SphinxRenderer):
@@ -240,7 +244,6 @@ def ask_user(d):
     * language:  document language
     * suffix:    source file suffix
     * master:    master document name
-    * epub:      use epub (bool)
     * extensions:  extensions to use (list)
     * makefile:  make Makefile
     * batchfile: make command file
@@ -341,12 +344,6 @@ document is a custom template, you can also set this to another filename.'''))
         d['master'] = do_prompt(__('Please enter a new file name, or rename the '
                                    'existing file and press Enter'), d['master'])
 
-    if 'epub' not in d:
-        print(__('''
-Sphinx can also add configuration for epub output:'''))
-        d['epub'] = do_prompt(__('Do you want to use the epub builder (y/n)'),
-                              'n', boolean)
-
     if 'extensions' not in d:
         print(__('Indicate which of the following Sphinx extensions should be '
                  'enabled:'))
@@ -387,9 +384,9 @@ def generate(d, overwrite=True, silent=False, templatedir=None):
     if 'mastertocmaxdepth' not in d:
         d['mastertocmaxdepth'] = 2
 
-    d['PY3'] = PY3
+    d['PY3'] = True
     d['project_fn'] = make_filename(d['project'])
-    d['project_url'] = urlquote(d['project'].encode('idna'))
+    d['project_url'] = quote(d['project'].encode('idna'))
     d['project_manpage'] = d['project_fn'].lower()
     d['now'] = time.asctime()
     d['project_underline'] = column_width(d['project']) * '='
@@ -433,7 +430,7 @@ def generate(d, overwrite=True, silent=False, templatedir=None):
         if overwrite or not path.isfile(fpath):
             if 'quiet' not in d:
                 print(__('Creating file %s.') % fpath)
-            with open(fpath, 'wt', encoding='utf-8', newline=newline) as f:
+            with open(fpath, 'wt', encoding='utf-8', newline=newline) as f:  # type: ignore
                 f.write(content)
         else:
             if 'quiet' not in d:
@@ -443,7 +440,7 @@ def generate(d, overwrite=True, silent=False, templatedir=None):
     if not conf_path or not path.isfile(conf_path):
         conf_path = os.path.join(package_dir, 'templates', 'quickstart', 'conf.py_t')
     with open(conf_path) as f:
-        conf_text = convert_python_source(f.read())
+        conf_text = f.read()
 
     write_file(path.join(srcdir, 'conf.py'), template.render_string(conf_text, d))
 
@@ -495,7 +492,7 @@ def valid_dir(d):
     if not path.isdir(dir):
         return False
 
-    if set(['Makefile', 'make.bat']) & set(os.listdir(dir)):  # type: ignore
+    if set(['Makefile', 'make.bat']) & set(os.listdir(dir)):
         return False
 
     if d['sep']:
@@ -511,7 +508,7 @@ def valid_dir(d):
         d['dot'] + 'templates',
         d['master'] + d['suffix'],
     ]
-    if set(reserved_names) & set(os.listdir(dir)):  # type: ignore
+    if set(reserved_names) & set(os.listdir(dir)):
         return False
 
     return True
@@ -531,7 +528,7 @@ Makefile to be used with sphinx-build.
 """))
 
     parser.add_argument('-q', '--quiet', action='store_true', dest='quiet',
-                        default=False,
+                        default=None,
                         help=__('quiet mode'))
     parser.add_argument('--version', action='version', dest='show_version',
                         version='%%(prog)s %s' % __display_version__)
@@ -540,7 +537,7 @@ Makefile to be used with sphinx-build.
                         help=__('output path'))
 
     group = parser.add_argument_group(__('Structure options'))
-    group.add_argument('--sep', action='store_true',
+    group.add_argument('--sep', action='store_true', default=None,
                        help=__('if specified, separate source and build dirs'))
     group.add_argument('--dot', metavar='DOT',
                        help=__('replacement for dot in _templates etc.'))
@@ -572,11 +569,11 @@ Makefile to be used with sphinx-build.
                        action='append', help=__('enable arbitrary extensions'))
 
     group = parser.add_argument_group(__('Makefile and Batchfile creation'))
-    group.add_argument('--makefile', action='store_true', dest='makefile',
+    group.add_argument('--makefile', action='store_true', dest='makefile', default=None,
                        help=__('create makefile'))
     group.add_argument('--no-makefile', action='store_false', dest='makefile',
                        help=__('do not create makefile'))
-    group.add_argument('--batchfile', action='store_true', dest='batchfile',
+    group.add_argument('--batchfile', action='store_true', dest='batchfile', default=None,
                        help=__('create batchfile'))
     group.add_argument('--no-batchfile', action='store_false',
                        dest='batchfile',
@@ -616,7 +613,7 @@ def main(argv=sys.argv[1:]):
 
     d = vars(args)
     # delete None or False value
-    d = dict((k, v) for k, v in d.items() if not (v is None or v is False))
+    d = dict((k, v) for k, v in d.items() if v is not None)
 
     try:
         if 'quiet' in d:
@@ -647,11 +644,6 @@ def main(argv=sys.argv[1:]):
         print('[Interrupted.]')
         return 130  # 128 + SIGINT
 
-    # decode values in d if value is a Python string literal
-    for key, value in d.items():
-        if isinstance(value, binary_type):
-            d[key] = term_decode(value)
-
     # handle use of CSV-style extension values
     d.setdefault('extensions', [])
     for ext in d['extensions'][:]:
@@ -666,7 +658,7 @@ def main(argv=sys.argv[1:]):
         except ValueError:
             print(__('Invalid template variable: %s') % variable)
 
-    generate(d, templatedir=args.templatedir)
+    generate(d, overwrite=False, templatedir=args.templatedir)
     return 0
 
 

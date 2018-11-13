@@ -12,12 +12,9 @@
 
 import glob
 import inspect
+import pickle
 import re
 from os import path
-from typing import TYPE_CHECKING
-
-from six import iteritems
-from six.moves import cPickle as pickle
 
 import sphinx
 from sphinx.builders import Builder
@@ -25,7 +22,8 @@ from sphinx.locale import __
 from sphinx.util import logging
 from sphinx.util.inspect import safe_getattr
 
-if TYPE_CHECKING:
+if False:
+    # For type annotation
     from typing import Any, Callable, Dict, IO, List, Pattern, Set, Tuple  # NOQA
     from sphinx.application import Sphinx  # NOQA
 
@@ -56,7 +54,7 @@ class CoverageBuilder(Builder):
     """
     name = 'coverage'
     epilog = __('Testing of coverage in the sources finished, look at the '
-                'results in %(outdir)s/python.txt.')
+                'results in %(outdir)s' + path.sep + 'python.txt.')
 
     def init(self):
         # type: () -> None
@@ -73,7 +71,7 @@ class CoverageBuilder(Builder):
                 logger.warning(__('invalid regex %r in coverage_c_regexes'), exp)
 
         self.c_ignorexps = {}  # type: Dict[unicode, List[Pattern]]
-        for (name, exps) in iteritems(self.config.coverage_ignore_c_items):
+        for (name, exps) in self.config.coverage_ignore_c_items.items():
             self.c_ignorexps[name] = compile_regex_list('coverage_ignore_c_items',
                                                         exps)
         self.mod_ignorexps = compile_regex_list('coverage_ignore_modules',
@@ -102,7 +100,7 @@ class CoverageBuilder(Builder):
         # Fetch all the info from the header files
         c_objects = self.env.domaindata['c']['objects']
         for filename in self.c_sourcefiles:
-            undoc = set()
+            undoc = set()  # type: Set[Tuple[unicode, unicode]]
             with open(filename, 'r') as f:
                 for line in f:
                     for key, regex in self.c_regexes:
@@ -127,7 +125,7 @@ class CoverageBuilder(Builder):
                 write_header(op, 'Undocumented C API elements', '=')
             op.write('\n')
 
-            for filename, undoc in iteritems(self.c_undoc):
+            for filename, undoc in self.c_undoc.items():
                 write_header(op, filename)
                 for typ, name in sorted(undoc):
                     op.write(' * %-50s [%9s]\n' % (name, typ))
@@ -247,7 +245,7 @@ class CoverageBuilder(Builder):
                     if undoc['classes']:
                         op.write('Classes:\n')
                         for name, methods in sorted(
-                                iteritems(undoc['classes'])):
+                                undoc['classes'].items()):
                             if not methods:
                                 op.write(' * %s\n' % name)
                             else:

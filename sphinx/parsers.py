@@ -9,15 +9,14 @@
     :license: BSD, see LICENSE for details.
 """
 
-from typing import TYPE_CHECKING
-
 import docutils.parsers
 import docutils.parsers.rst
 from docutils.parsers.rst import states
 from docutils.statemachine import StringList
 from docutils.transforms.universal import SmartQuotes
 
-if TYPE_CHECKING:
+if False:
+    # For type annotation
     from typing import Any, Dict, List, Type  # NOQA
     from docutils import nodes  # NOQA
     from docutils.transforms import Transform  # NOQA
@@ -42,6 +41,9 @@ class Parser(docutils.parsers.Parser):
         Emit a warning. (Same as :meth:`sphinx.application.Sphinx.warn()`)
     self.info()
         Emit a informational message. (Same as :meth:`sphinx.application.Sphinx.info()`)
+
+    .. deprecated:: 1.6
+       ``warn()`` and ``info()`` is deprecated.  Use :mod:`sphinx.util.logging` instead.
     """
 
     def set_application(self, app):
@@ -53,8 +55,6 @@ class Parser(docutils.parsers.Parser):
         self.app = app
         self.config = app.config
         self.env = app.env
-        self.warn = app.warn
-        self.info = app.info
 
 
 class RSTParser(docutils.parsers.rst.Parser):

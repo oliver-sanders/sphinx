@@ -76,8 +76,7 @@ Quick guide
 `sphinx-intl`_ is a useful tool to work with Sphinx translation flow.
 This section describe an easy way to translate with sphinx-intl.
 
-#. Install `sphinx-intl`_ by :command:`pip install sphinx-intl` or
-   :command:`easy_install sphinx-intl`.
+#. Install `sphinx-intl`_ by :command:`pip install sphinx-intl`.
 
 #. Add configurations to your `conf.py`::
 
@@ -113,11 +112,26 @@ This section describe an easy way to translate with sphinx-intl.
 #. make translated document.
 
    You need a :confval:`language` parameter in ``conf.py`` or you may also
-   specify the parameter on the command line:
+   specify the parameter on the command line (for BSD/GNU make):
 
    .. code-block:: console
 
       $ make -e SPHINXOPTS="-D language='de'" html
+
+   command line (for Windows cmd.exe):
+
+   .. code-block:: console
+
+      > set SPHINXOPTS=-D language=de
+      > .\make.bat html
+
+   command line (for PowerShell):
+
+   .. code-block:: console
+
+      > Set-Item env:SPHINXOPTS "-D language=de"
+      > .\make.bat html
+
 
 Congratulations! You got the translated documentation in the ``_build/html``
 directory.
@@ -192,7 +206,7 @@ easy to fetch and push translations.
 
       $ pip install transifex-client
 
-   .. seealso:: `Transifex Client v0.8 &mdash; Transifex documentation`_
+   .. seealso:: `Transifex Client documentation`_
 
 
 #. Create your transifex_ account and create new project for your document
@@ -263,7 +277,7 @@ easy to fetch and push translations.
       ...
       Done.
 
-   Invoke make html:
+   Invoke make html (for BSD/GNU make):
 
    .. code-block:: console
 
@@ -290,7 +304,7 @@ Contributing to Sphinx reference translation
 The recommended way for new contributors to translate Sphinx reference
 is to join the translation team on Transifex.
 
-There is `sphinx translation page`_ for Sphinx-1.3 documentation.
+There is `sphinx translation page`_ for Sphinx (master) documentation.
 
 1. Login to transifex_ service.
 2. Go to `sphinx translation page`_.
@@ -307,8 +321,8 @@ There is `sphinx translation page`_ for Sphinx-1.3 documentation.
 .. [2] Because nobody expects the Spanish Inquisition!
 
 
-.. _`transifex-client`: https://pypi.python.org/pypi/transifex-client
-.. _`sphinx-intl`: https://pypi.python.org/pypi/sphinx-intl
+.. _`transifex-client`: https://pypi.org/project/transifex-client/
+.. _`sphinx-intl`: https://pypi.org/project/sphinx-intl/
 .. _Transifex: https://www.transifex.com/
-.. _`sphinx translation page`: https://www.transifex.com/sphinx-doc/sphinx-doc-1_3/
-.. _`Transifex Client v0.8 &mdash; Transifex documentation`: https://docs.transifex.com/client/introduction/
+.. _`sphinx translation page`: https://www.transifex.com/sphinx-doc/sphinx-doc/
+.. _`Transifex Client documentation`: https://docs.transifex.com/client/introduction/

@@ -9,18 +9,15 @@
     :license: BSD, see LICENSE for details.
 """
 
-from typing import TYPE_CHECKING
-
-from six import itervalues
-
-if TYPE_CHECKING:
+if False:
+    # For type annotation
     from typing import Dict, List, Set  # NOQA
     from docutils import nodes  # NOQA
     from sphinx.sphinx import Sphinx  # NOQA
     from sphinx.environment import BuildEnvironment  # NOQA
 
 
-class EnvironmentCollector(object):
+class EnvironmentCollector:
     """An EnvironmentCollector is a specific data collector from each document.
 
     It gathers data and stores :py:class:`BuildEnvironment
@@ -45,7 +42,7 @@ class EnvironmentCollector(object):
     def disable(self, app):
         # type: (Sphinx) -> None
         assert self.listener_ids is not None
-        for listener_id in itervalues(self.listener_ids):
+        for listener_id in self.listener_ids.values():
             app.disconnect(listener_id)
         self.listener_ids = None
 

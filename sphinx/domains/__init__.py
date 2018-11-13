@@ -11,15 +11,13 @@
 """
 
 import copy
-from typing import TYPE_CHECKING
-
-from six import iteritems
 
 from sphinx.errors import SphinxError
 from sphinx.locale import _
 
-if TYPE_CHECKING:
-    from typing import Any, Callable, Dict, Iterable, List, Tuple, Type, Union  # NOQA
+if False:
+    # For type annotation
+    from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, Type, Union  # NOQA
     from docutils import nodes  # NOQA
     from docutils.parsers.rst.states import Inliner  # NOQA
     from sphinx.builders import Builder  # NOQA
@@ -28,7 +26,7 @@ if TYPE_CHECKING:
     from sphinx.util.typing import RoleFunction  # NOQA
 
 
-class ObjType(object):
+class ObjType:
     """
     An ObjType is the description for a type of object that a domain can
     document.  In the object_types attribute of Domain subclasses, object type
@@ -55,7 +53,7 @@ class ObjType(object):
         self.attrs.update(attrs)
 
 
-class Index(object):
+class Index:
     """
     An Index is the description for a domain-specific index.  To add an index to
     a domain, subclass Index, overriding the three name attributes:
@@ -113,7 +111,7 @@ class Index(object):
         raise NotImplementedError
 
 
-class Domain(object):
+class Domain:
     """
     A Domain is meant to be a group of "object" description directives for
     objects of a similar nature, and corresponding roles to create references to
@@ -150,6 +148,8 @@ class Domain(object):
     indices = []            # type: List[Type[Index]]
     #: role name -> a warning message if reference is missing
     dangling_warnings = {}  # type: Dict[unicode, unicode]
+    #: node_class -> (enum_node_type, title_getter)
+    enumerable_nodes = {}   # type: Dict[Type[nodes.Node], Tuple[unicode, Callable]]
 
     #: data value for a fresh environment
     initial_data = {}       # type: Dict
@@ -181,7 +181,7 @@ class Domain(object):
             self.data = env.domaindata[self.name]
             if self.data['version'] != self.data_version:
                 raise IOError('data of %r domain out of date' % self.label)
-        for name, obj in iteritems(self.object_types):
+        for name, obj in self.object_types.items():
             for rolename in obj.roles:
                 self._role2type.setdefault(rolename, []).append(name)
             self._type2role[name] = obj.roles[0] if obj.roles else ''
@@ -201,7 +201,7 @@ class Domain(object):
             self._role2type.setdefault(role, []).append(name)
 
     def role(self, name):
-        # type: (unicode) -> Callable
+        # type: (unicode) -> RoleFunction
         """Return a role adapter function that always gives the registered
         role its full name ('domain:name') as the first argument.
         """
@@ -212,7 +212,7 @@ class Domain(object):
         fullname = '%s:%s' % (self.name, name)
 
         def role_adapter(typ, rawtext, text, lineno, inliner, options={}, content=[]):
-            # type: (unicode, unicode, unicode, int, Inliner, Dict, List[unicode]) -> nodes.Node  # NOQA
+            # type: (unicode, unicode, unicode, int, Inliner, Optional[Dict], Optional[List[unicode]]) -> Tuple[List[nodes.Node], List[nodes.Node]]  # NOQA
             return self.roles[name](fullname, rawtext, text, lineno,
                                     inliner, options, content)
         self._role_cache[name] = role_adapter
@@ -332,6 +332,12 @@ class Domain(object):
         if primary:
             return type.lname
         return _('%s %s') % (self.label, type.lname)
+
+    def get_enumerable_node_type(self, node):
+        # type: (nodes.Node) -> unicode
+        """Get type of enumerable nodes (experimental)."""
+        enum_node_type, _ = self.enumerable_nodes.get(node.__class__, (None, None))
+        return enum_node_type
 
     def get_full_qualified_name(self, node):
         # type: (nodes.Node) -> unicode

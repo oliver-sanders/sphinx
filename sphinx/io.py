@@ -10,33 +10,38 @@
 """
 import codecs
 import re
-from typing import TYPE_CHECKING
+import warnings
 
 from docutils.core import Publisher
 from docutils.io import FileInput, NullOutput
+from docutils.parsers.rst import Parser as RSTParser
 from docutils.readers import standalone
 from docutils.statemachine import StringList, string2lines
 from docutils.writers import UnfilteredWriter
-from six import text_type, iteritems
+from six import text_type
 from typing import Any, Union  # NOQA
 
+from sphinx.deprecation import RemovedInSphinx30Warning
 from sphinx.locale import __
 from sphinx.transforms import (
     ApplySourceWorkaround, ExtraTranslatableNodes, CitationReferences,
     DefaultSubstitutions, MoveModuleTargets, HandleCodeBlocks, SortIds,
     AutoNumbering, AutoIndexUpgrader, FilterSystemMessages,
-    UnreferencedFootnotesDetector, SphinxSmartQuotes, ManpageLink
+    UnreferencedFootnotesDetector, SphinxSmartQuotes, DoctreeReadEvent, ManpageLink
 )
 from sphinx.transforms import SphinxTransformer
 from sphinx.transforms.compact_bullet_list import RefOnlyBulletListTransform
 from sphinx.transforms.i18n import (
     PreserveTranslatableMessages, Locale, RemoveTranslatableInline,
 )
+from sphinx.transforms.references import SphinxDomains, SubstitutionDefinitionsRemover
 from sphinx.util import logging
 from sphinx.util.docutils import LoggingReporter
+from sphinx.versioning import UIDTransform
 
-if TYPE_CHECKING:
-    from typing import Any, Dict, List, Tuple, Union  # NOQA
+if False:
+    # For type annotation
+    from typing import Any, Dict, List, Tuple, Type, Union  # NOQA
     from docutils import nodes  # NOQA
     from docutils.io import Input  # NOQA
     from docutils.parsers import Parser  # NOQA
@@ -61,10 +66,10 @@ class SphinxBaseReader(standalone.Reader):
     def __init__(self, app, *args, **kwargs):
         # type: (Sphinx, Any, Any) -> None
         self.env = app.env
-        standalone.Reader.__init__(self, *args, **kwargs)
+        super(SphinxBaseReader, self).__init__(*args, **kwargs)
 
     def get_transforms(self):
-        # type: () -> List[Transform]
+        # type: () -> List[Type[Transform]]
         return standalone.Reader.get_transforms(self) + self.transforms
 
     def new_document(self):
@@ -93,13 +98,15 @@ class SphinxStandaloneReader(SphinxBaseReader):
                   Locale, CitationReferences, DefaultSubstitutions, MoveModuleTargets,
                   HandleCodeBlocks, AutoNumbering, AutoIndexUpgrader, SortIds,
                   RemoveTranslatableInline, FilterSystemMessages, RefOnlyBulletListTransform,
-                  UnreferencedFootnotesDetector, SphinxSmartQuotes, ManpageLink
-                  ]  # type: List[Transform]
+                  UnreferencedFootnotesDetector, SphinxSmartQuotes, ManpageLink,
+                  SphinxDomains, SubstitutionDefinitionsRemover, DoctreeReadEvent,
+                  UIDTransform,
+                  ]  # type: List[Type[Transform]]
 
     def __init__(self, app, *args, **kwargs):
         # type: (Sphinx, Any, Any) -> None
         self.transforms = self.transforms + app.registry.get_transforms()
-        SphinxBaseReader.__init__(self, app, *args, **kwargs)
+        super(SphinxStandaloneReader, self).__init__(app, *args, **kwargs)
 
 
 class SphinxI18nReader(SphinxBaseReader):
@@ -111,32 +118,25 @@ class SphinxI18nReader(SphinxBaseReader):
     Because the translated texts are partial and they don't have correct line numbers.
     """
 
-    lineno = None  # type: int
     transforms = [ApplySourceWorkaround, ExtraTranslatableNodes, CitationReferences,
                   DefaultSubstitutions, MoveModuleTargets, HandleCodeBlocks,
                   AutoNumbering, SortIds, RemoveTranslatableInline,
                   FilterSystemMessages, RefOnlyBulletListTransform,
-                  UnreferencedFootnotesDetector, SphinxSmartQuotes, ManpageLink]
+                  UnreferencedFootnotesDetector, SphinxSmartQuotes, ManpageLink,
+                  SubstitutionDefinitionsRemover]  # type: List[Type[Transform]]
 
     def set_lineno_for_reporter(self, lineno):
         # type: (int) -> None
         """Stores the source line number of original text."""
-        self.lineno = lineno
+        warnings.warn('SphinxI18nReader.set_lineno_for_reporter() is deprecated.',
+                      RemovedInSphinx30Warning, stacklevel=2)
 
-    def new_document(self):
-        # type: () -> nodes.document
-        """Creates a new document object which having a special reporter object for
-        translation.
-        """
-        document = SphinxBaseReader.new_document(self)
-        reporter = document.reporter
-
-        def get_source_and_line(lineno=None):
-            # type: (int) -> Tuple[unicode, int]
-            return reporter.source, self.lineno
-
-        reporter.get_source_and_line = get_source_and_line
-        return document
+    @property
+    def line(self):
+        # type: () -> int
+        warnings.warn('SphinxI18nReader.line is deprecated.',
+                      RemovedInSphinx30Warning, stacklevel=2)
+        return 0
 
 
 class SphinxDummyWriter(UnfilteredWriter):
@@ -171,7 +171,7 @@ class SphinxBaseFileInput(FileInput):
         codecs.register_error('sphinx', self.warn_and_replace)  # type: ignore
 
         kwds['error_handler'] = 'sphinx'  # py3: handle error on open.
-        FileInput.__init__(self, *args, **kwds)
+        super(SphinxBaseFileInput, self).__init__(*args, **kwds)
 
     def decode(self, data):
         # type: (Union[unicode, bytes]) -> unicode
@@ -282,7 +282,7 @@ class FiletypeNotFoundError(Exception):
 
 def get_filetype(source_suffix, filename):
     # type: (Dict[unicode, unicode], unicode) -> unicode
-    for suffix, filetype in iteritems(source_suffix):
+    for suffix, filetype in source_suffix.items():
         if filename.endswith(suffix):
             # If default filetype (None), considered as restructuredtext.
             return filetype or 'restructuredtext'
@@ -299,6 +299,13 @@ def read_doc(app, env, filename):
     source = input_class(app, env, source=None, source_path=filename,
                          encoding=env.config.source_encoding)
     parser = app.registry.create_source_parser(app, filetype)
+    if parser.__class__.__name__ == 'CommonMarkParser' and parser.settings_spec == ():
+        # a workaround for recommonmark
+        #   If recommonmark.AutoStrictify is enabled, the parser invokes reST parser
+        #   internally.  But recommonmark-0.4.0 does not provide settings_spec for reST
+        #   parser.  As a workaround, this copies settings_spec for RSTParser to the
+        #   CommonMarkParser.
+        parser.settings_spec = RSTParser.settings_spec
 
     pub = Publisher(reader=reader,
                     parser=parser,
@@ -306,7 +313,7 @@ def read_doc(app, env, filename):
                     source_class=SphinxDummySourceClass,
                     destination=NullOutput())
     pub.set_components(None, 'restructuredtext', None)
-    pub.process_programmatic_settings(None, env.settings, None)  # type: ignore
+    pub.process_programmatic_settings(None, env.settings, None)
     pub.set_source(source, filename)
     pub.publish()
     return pub.document

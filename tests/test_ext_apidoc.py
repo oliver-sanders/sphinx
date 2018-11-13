@@ -32,7 +32,10 @@ def apidoc(rootdir, tempdir, apidoc_params):
 
 @pytest.fixture
 def apidoc_params(request):
-    markers = request.node.get_marker("apidoc")
+    if hasattr(request.node, 'iter_markers'):  # pytest-3.6.0 or newer
+        markers = request.node.iter_markers("apidoc")
+    else:
+        markers = request.node.get_marker("apidoc")
     pargs = {}
     kwargs = {}
 
@@ -211,7 +214,7 @@ def test_trailing_underscore(make_app, apidoc):
 
 @pytest.mark.apidoc(
     coderoot='test-apidoc-pep420/a',
-    excludes=["b/c/d.py", "b/e/f.py"],
+    excludes=["b/c/d.py", "b/e/f.py", "b/e/__init__.py"],
     options=["--implicit-namespaces", "--separate"],
 )
 def test_excludes(apidoc):
@@ -221,6 +224,45 @@ def test_excludes(apidoc):
     assert not (outdir / 'a.b.e.rst').isfile()  # skipped because of empty after excludes
     assert (outdir / 'a.b.x.rst').isfile()
     assert (outdir / 'a.b.x.y.rst').isfile()
+
+
+@pytest.mark.apidoc(
+    coderoot='test-apidoc-pep420/a',
+    excludes=["b/e"],
+    options=["--implicit-namespaces", "--separate"],
+)
+def test_excludes_subpackage_should_be_skipped(apidoc):
+    """Subpackage exclusion should work."""
+    outdir = apidoc.outdir
+    assert (outdir / 'conf.py').isfile()
+    assert (outdir / 'a.b.c.rst').isfile()  # generated because not empty
+    assert not (outdir / 'a.b.e.f.rst').isfile()  # skipped because 'b/e' subpackage is skipped
+
+
+@pytest.mark.apidoc(
+    coderoot='test-apidoc-pep420/a',
+    excludes=["b/e/f.py"],
+    options=["--implicit-namespaces", "--separate"],
+)
+def test_excludes_module_should_be_skipped(apidoc):
+    """Module exclusion should work."""
+    outdir = apidoc.outdir
+    assert (outdir / 'conf.py').isfile()
+    assert (outdir / 'a.b.c.rst').isfile()  # generated because not empty
+    assert not (outdir / 'a.b.e.f.rst').isfile()  # skipped because of empty after excludes
+
+
+@pytest.mark.apidoc(
+    coderoot='test-apidoc-pep420/a',
+    excludes=[],
+    options=["--implicit-namespaces", "--separate"],
+)
+def test_excludes_module_should_not_be_skipped(apidoc):
+    """Module should be included if no excludes are used."""
+    outdir = apidoc.outdir
+    assert (outdir / 'conf.py').isfile()
+    assert (outdir / 'a.b.c.rst').isfile()  # generated because not empty
+    assert (outdir / 'a.b.e.f.rst').isfile()  # skipped because of empty after excludes
 
 
 @pytest.mark.apidoc(
@@ -339,3 +381,27 @@ def extract_toc(path):
     toctree = rst[start_idx + len(toctree_start):end_idx]
 
     return toctree
+
+
+@pytest.mark.apidoc(
+    coderoot='test-apidoc-subpackage-in-toc',
+    options=['--separate']
+)
+def test_subpackage_in_toc(make_app, apidoc):
+    """Make sure that empty subpackages with non-empty subpackages in them
+       are not skipped (issue #4520)
+    """
+    outdir = apidoc.outdir
+    assert (outdir / 'conf.py').isfile()
+
+    assert (outdir / 'parent.rst').isfile()
+    with open(outdir / 'parent.rst') as f:
+        parent = f.read()
+    assert 'parent.child' in parent
+
+    assert (outdir / 'parent.child.rst').isfile()
+    with open(outdir / 'parent.child.rst') as f:
+        parent_child = f.read()
+    assert 'parent.child.foo' in parent_child
+
+    assert (outdir / 'parent.child.foo.rst').isfile()

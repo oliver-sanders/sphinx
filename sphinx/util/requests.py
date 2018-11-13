@@ -13,12 +13,11 @@ from __future__ import absolute_import
 
 import warnings
 from contextlib import contextmanager
-from typing import TYPE_CHECKING
+from urllib.parse import urlsplit
 
 import pkg_resources
 import requests
 from six import string_types
-from six.moves.urllib.parse import urlsplit
 
 try:
     from requests.packages.urllib3.exceptions import SSLError
@@ -35,7 +34,7 @@ except ImportError:
         from urllib3.exceptions import InsecureRequestWarning  # type: ignore
     except ImportError:
         # for requests < 2.4.0
-        InsecureRequestWarning = None
+        InsecureRequestWarning = None  # type: ignore
 
 try:
     from requests.packages.urllib3.exceptions import InsecurePlatformWarning
@@ -45,7 +44,7 @@ except ImportError:
         from urllib3.exceptions import InsecurePlatformWarning  # type: ignore
     except ImportError:
         # for requests < 2.4.0
-        InsecurePlatformWarning = None
+        InsecurePlatformWarning = None  # type: ignore
 
 # try to load requests[security] (but only if SSL is available)
 try:
@@ -76,7 +75,8 @@ else:
             'install requests-2.4.1+.'
         )
 
-if TYPE_CHECKING:
+if False:
+    # For type annotation
     from typing import Any, Generator, Union  # NOQA
     from sphinx.config import Config  # NOQA
 

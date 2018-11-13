@@ -13,7 +13,6 @@ import os
 import re
 from collections import namedtuple
 from os import path
-from typing import TYPE_CHECKING
 from zipfile import ZIP_DEFLATED, ZIP_STORED, ZipFile
 
 from docutils import nodes
@@ -36,7 +35,8 @@ except ImportError:
     except ImportError:
         Image = None
 
-if TYPE_CHECKING:
+if False:
+    # For type annotation
     from typing import Any, Dict, List, Tuple  # NOQA
     from sphinx.application import Sphinx  # NOQA
 
@@ -195,7 +195,7 @@ class EpubBuilder(StandaloneHTMLBuilder):
         """Collect section titles, their depth in the toc and the refuri."""
         # XXX: is there a better way than checking the attribute
         # toctree-l[1-8] on the parent node?
-        if isinstance(doctree, nodes.reference) and 'refuri' in doctree:
+        if isinstance(doctree, nodes.reference) and doctree.get('refuri'):
             refuri = doctree['refuri']
             if refuri.startswith('http://') or refuri.startswith('https://') \
                or refuri.startswith('irc:') or refuri.startswith('mailto:'):
@@ -272,6 +272,16 @@ class EpubBuilder(StandaloneHTMLBuilder):
                     node['refuri'] = self.fix_fragment(m.group(1), m.group(2))
             if 'refid' in node:
                 node['refid'] = self.fix_fragment('', node['refid'])
+        for node in tree.traverse(nodes.target):
+            for i, node_id in enumerate(node['ids']):
+                if ':' in node_id:
+                    node['ids'][i] = self.fix_fragment('', node_id)
+
+            next_node = node.next_node(siblings=True)
+            if next_node and isinstance(next_node, nodes.Element):
+                for i, node_id in enumerate(next_node['ids']):
+                    if ':' in node_id:
+                        next_node['ids'][i] = self.fix_fragment('', node_id)
         for node in tree.traverse(addnodes.desc_signature):
             ids = node.attributes['ids']
             newids = []
@@ -673,7 +683,7 @@ class EpubBuilder(StandaloneHTMLBuilder):
         """
         metadata = {}  # type: Dict[unicode, Any]
         metadata['uid'] = self.config.epub_uid
-        metadata['title'] = self.config.epub_title
+        metadata['title'] = self.esc(self.config.epub_title)
         metadata['level'] = level
         metadata['navpoints'] = navpoints
         return metadata
@@ -708,9 +718,9 @@ class EpubBuilder(StandaloneHTMLBuilder):
         """
         logger.info(__('writing %s file...'), outname)
         epub_filename = path.join(outdir, outname)
-        with ZipFile(epub_filename, 'w', ZIP_DEFLATED) as epub:  # type: ignore
-            epub.write(path.join(outdir, 'mimetype'), 'mimetype', ZIP_STORED)  # type: ignore
+        with ZipFile(epub_filename, 'w', ZIP_DEFLATED) as epub:
+            epub.write(path.join(outdir, 'mimetype'), 'mimetype', ZIP_STORED)
             for filename in [u'META-INF/container.xml', u'content.opf', u'toc.ncx']:
-                epub.write(path.join(outdir, filename), filename, ZIP_DEFLATED)  # type: ignore
+                epub.write(path.join(outdir, filename), filename, ZIP_DEFLATED)
             for filename in self.files:
-                epub.write(path.join(outdir, filename), filename, ZIP_DEFLATED)  # type: ignore
+                epub.write(path.join(outdir, filename), filename, ZIP_DEFLATED)

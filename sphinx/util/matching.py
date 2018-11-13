@@ -8,12 +8,11 @@
     :copyright: Copyright 2007-2018 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
-from __future__ import absolute_import
 
 import re
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
+if False:
+    # For type annotation
     from typing import Callable, Dict, List, Match, Pattern  # NOQA
 
 
@@ -69,7 +68,7 @@ def compile_matchers(patterns):
     return [re.compile(_translate_pattern(pat)).match for pat in patterns]
 
 
-class Matcher(object):
+class Matcher:
     """A pattern matcher for Multiple shell-style glob patterns.
 
     Note: this modifies the patterns to work with copy_asset().

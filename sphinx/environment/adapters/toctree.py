@@ -9,17 +9,16 @@
     :license: BSD, see LICENSE for details.
 """
 
-from typing import TYPE_CHECKING
-
 from docutils import nodes
-from six import iteritems
 
 from sphinx import addnodes
 from sphinx.locale import __
 from sphinx.util import url_re, logging
+from sphinx.util.matching import Matcher
 from sphinx.util.nodes import clean_astext, process_only_nodes
 
-if TYPE_CHECKING:
+if False:
+    # For type annotation
     from typing import Any, Dict, List  # NOQA
     from sphinx.builders import Builder  # NOQA
     from sphinx.environment import BuildEnvironment  # NOQA
@@ -27,7 +26,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class TocTree(object):
+class TocTree:
     def __init__(self, env):
         # type: (BuildEnvironment) -> None
         self.env = env
@@ -84,6 +83,7 @@ class TocTree(object):
         # interactions between marking and pruning the tree (see bug #1046).
 
         toctree_ancestors = self.get_toctree_ancestors(docname)
+        excluded = Matcher(self.env.config.exclude_patterns)
 
         def _toctree_add_classes(node, depth):
             # type: (nodes.Node, int) -> None
@@ -120,7 +120,7 @@ class TocTree(object):
             # type: (addnodes.toctree, List[nodes.Node], bool, bool) -> List[nodes.Node]
             """Return TOC entries for a toctree node."""
             refs = [(e[0], e[1]) for e in toctreenode['entries']]
-            entries = []
+            entries = []  # type: List[nodes.Node]
             for (title, ref) in refs:
                 try:
                     refdoc = None
@@ -173,8 +173,12 @@ class TocTree(object):
                                        ref, location=toctreenode)
                 except KeyError:
                     # this is raised if the included file does not exist
-                    logger.warning(__('toctree contains reference to nonexisting document %r'),
-                                   ref, location=toctreenode)
+                    if excluded(self.env.doc2path(ref, None)):
+                        message = __('toctree contains reference to excluded document %r')
+                    else:
+                        message = __('toctree contains reference to nonexisting document %r')
+
+                    logger.warning(message, ref, location=toctreenode)
                 else:
                     # if titles_only is given, only keep the main title and
                     # sub-toctrees
@@ -256,7 +260,7 @@ class TocTree(object):
     def get_toctree_ancestors(self, docname):
         # type: (unicode) -> List[unicode]
         parent = {}
-        for p, children in iteritems(self.env.toctree_includes):
+        for p, children in self.env.toctree_includes.items():
             for child in children:
                 parent[child] = p
         ancestors = []  # type: List[unicode]
@@ -289,7 +293,7 @@ class TocTree(object):
                         self._toctree_prune(subnode, depth + 1, maxdepth,  collapse)
 
     def get_toc_for(self, docname, builder):
-        # type: (unicode, Builder) -> Dict[unicode, nodes.Node]
+        # type: (unicode, Builder) -> nodes.Node
         """Return a TOC nodetree -- for use on the same page only!"""
         tocdepth = self.env.metadata[docname].get('tocdepth', 0)
         try:

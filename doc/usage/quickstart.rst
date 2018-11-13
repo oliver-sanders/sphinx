@@ -108,9 +108,8 @@ for this document -- use the "Show Source" link in the sidebar.
 
 .. todo:: Update the below link when we add new guides on these.
 
-|more| See :ref:`rst-primer` for a more in-depth introduction to
-reStructuredText and :ref:`sphinxmarkup` for a full list of markup added by
-Sphinx.
+|more| See :doc:`/usage/restructuredtext/index` for a more in-depth
+introduction to reStructuredText, including markup added by Sphinx.
 
 
 Running the build
@@ -128,7 +127,7 @@ directory in which you want to place the built documentation.
 The :option:`-b <sphinx-build -b>` option selects a builder; in this example
 Sphinx will build HTML files.
 
-|more| Refer to the :program:`sphinx-build man page <sphinx-build>` for all
+|more| Refer to the :doc:`sphinx-build man page </man/sphinx-build>` for all
 options that :program:`sphinx-build` supports.
 
 However, :program:`sphinx-quickstart` script creates a :file:`Makefile` and a
@@ -211,8 +210,8 @@ Each domain will have special rules for how the signatures can look like, and
 make the formatted output look pretty, or add specific features like links to
 parameter types, e.g. in the C/C++ domains.
 
-|more| See :ref:`domains` for all the available domains and their
-directives/roles.
+|more| See :doc:`/usage/restructuredtext/domains` for all the available domains
+and their directives/roles.
 
 
 Basic configuration
@@ -237,7 +236,8 @@ so on.  The file is saved in UTF-8 by default, as indicated by the encoding
 declaration in the first line.  If you use non-ASCII characters in any string
 value, you need to use Python Unicode strings (like ``project = u'Exposé'``).
 
-|more| See :ref:`build-config` for documentation of all available config values.
+|more| See :doc:`/usage/configuration` for documentation of all available
+config values.
 
 
 .. todo:: Move this entire doc to a different section
@@ -308,8 +308,8 @@ cross-reference that has no matching target in the current documentation set,
 will be looked up in the documentation sets configured in
 :confval:`intersphinx_mapping` (this needs access to the URL in order to
 download the list of valid targets).  Intersphinx also works for some other
-:ref:`domains' <domains>` roles including ``:ref:``, however it doesn't work
-for ``:doc:`` as that is non-domain role.
+:term:`domain`\'s roles including ``:ref:``, however it doesn't work for
+``:doc:`` as that is non-domain role.
 
 |more| See :mod:`sphinx.ext.intersphinx` for the complete description of the
 features of intersphinx.
@@ -318,12 +318,7 @@ features of intersphinx.
 More topics to be covered
 -------------------------
 
-- :doc:`Other extensions </extensions>`:
-
-  * :doc:`/ext/math`,
-  * :doc:`/ext/viewcode`,
-  * :doc:`/ext/doctest`,
-  * ...
+- :doc:`Other extensions </usage/extensions/index>`:
 - Static files
 - :doc:`Selecting a theme </theming>`
 - :doc:`/setuptools`
@@ -336,7 +331,7 @@ More topics to be covered
 
 .. [#] This is the usual layout.  However, :file:`conf.py` can also live in
        another directory, the :term:`configuration directory`.  Refer to the
-       :program:`sphinx-build man page <sphinx-build>` for more information.
+       :doc:`sphinx-build man page </man/sphinx-build>` for more information.
 
 .. |more| image:: /_static/more.png
           :align: middle

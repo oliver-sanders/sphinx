@@ -10,13 +10,11 @@
 """
 from __future__ import print_function
 
-import codecs
 import pipes
 import plistlib
 import shlex
 import subprocess
 from os import path, environ
-from typing import TYPE_CHECKING
 
 from sphinx.builders.html import StandaloneHTMLBuilder
 from sphinx.config import string_classes
@@ -29,19 +27,13 @@ from sphinx.util.matching import Matcher
 from sphinx.util.osutil import copyfile, ensuredir, make_filename
 from sphinx.util.pycompat import htmlescape
 
-if TYPE_CHECKING:
+if False:
+    # For type annotation
     from typing import Any, Dict  # NOQA
     from sphinx.application import Sphinx  # NOQA
 
 
 logger = logging.getLogger(__name__)
-
-# Use plistlib.dump in 3.4 and above
-try:
-    write_plist = plistlib.dump  # type: ignore
-except AttributeError:
-    write_plist = plistlib.writePlist
-
 
 # False access page (used because helpd expects strict XHTML)
 access_page_template = '''\
@@ -174,7 +166,7 @@ class AppleHelpBuilder(StandaloneHTMLBuilder):
 
         logger.info(bold(__('writing Info.plist... ')), nonl=True)
         with open(path.join(contents_dir, 'Info.plist'), 'wb') as f:
-            write_plist(info_plist, f)
+            plistlib.dump(info_plist, f)  # type: ignore
         logger.info(__('done'))
 
         # Copy the icon, if one is supplied
@@ -193,7 +185,7 @@ class AppleHelpBuilder(StandaloneHTMLBuilder):
 
         # Build the access page
         logger.info(bold(__('building access page...')), nonl=True)
-        with codecs.open(path.join(language_dir, '_access.html'), 'w') as f:  # type: ignore
+        with open(path.join(language_dir, '_access.html'), 'w') as f:
             f.write(access_page_template % {
                 'toc': htmlescape(toc, quote=True),
                 'title': htmlescape(self.config.applehelp_title)

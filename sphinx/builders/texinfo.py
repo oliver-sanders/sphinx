@@ -11,13 +11,13 @@
 
 import os
 from os import path
-from typing import TYPE_CHECKING
 
 from docutils import nodes
 from docutils.frontend import OptionParser
 from docutils.io import FileOutput
 
 from sphinx import addnodes
+from sphinx import package_dir
 from sphinx.builders import Builder
 from sphinx.environment import NoUri
 from sphinx.environment.adapters.asset import ImageAdapter
@@ -31,65 +31,14 @@ from sphinx.util.nodes import inline_all_toctrees
 from sphinx.util.osutil import SEP, make_filename
 from sphinx.writers.texinfo import TexinfoWriter, TexinfoTranslator
 
-if TYPE_CHECKING:
+if False:
+    # For type annotation
     from sphinx.application import Sphinx  # NOQA
     from typing import Any, Dict, Iterable, List, Tuple, Union  # NOQA
 
 
 logger = logging.getLogger(__name__)
-
-TEXINFO_MAKEFILE = '''\
-# Makefile for Sphinx Texinfo output
-
-infodir ?= /usr/share/info
-
-MAKEINFO = makeinfo --no-split
-MAKEINFO_html = makeinfo --no-split --html
-MAKEINFO_plaintext = makeinfo --no-split --plaintext
-TEXI2PDF = texi2pdf --batch --expand
-INSTALL_INFO = install-info
-
-ALLDOCS = $(basename $(wildcard *.texi))
-
-all: info
-info: $(addsuffix .info,$(ALLDOCS))
-plaintext: $(addsuffix .txt,$(ALLDOCS))
-html: $(addsuffix .html,$(ALLDOCS))
-pdf: $(addsuffix .pdf,$(ALLDOCS))
-
-install-info: info
-\tfor f in *.info; do \\
-\t  cp -t $(infodir) "$$f" && \\
-\t  $(INSTALL_INFO) --info-dir=$(infodir) "$$f" ; \\
-\tdone
-
-uninstall-info: info
-\tfor f in *.info; do \\
-\t  rm -f "$(infodir)/$$f"  ; \\
-\t  $(INSTALL_INFO) --delete --info-dir=$(infodir) "$$f" ; \\
-\tdone
-
-%.info: %.texi
-\t$(MAKEINFO) -o '$@' '$<'
-
-%.txt: %.texi
-\t$(MAKEINFO_plaintext) -o '$@' '$<'
-
-%.html: %.texi
-\t$(MAKEINFO_html) -o '$@' '$<'
-
-%.pdf: %.texi
-\t-$(TEXI2PDF) '$<'
-\t-$(TEXI2PDF) '$<'
-\t-$(TEXI2PDF) '$<'
-
-clean:
-\trm -f *.info *.pdf *.txt *.html
-\trm -f *.log *.ind *.aux *.toc *.syn *.idx *.out *.ilg *.pla *.ky *.pg
-\trm -f *.vr *.tp *.fn *.fns *.def *.defs *.cp *.cps *.ge *.ges *.mo
-
-.PHONY: all info plaintext html pdf install-info uninstall-info clean
-'''
+template_dir = os.path.join(package_dir, 'templates', 'texinfo')
 
 
 class TexinfoBuilder(Builder):
@@ -239,8 +188,7 @@ class TexinfoBuilder(Builder):
         fn = path.join(self.outdir, 'Makefile')
         logger.info(fn, nonl=1)
         try:
-            with open(fn, 'w') as mkfile:
-                mkfile.write(TEXINFO_MAKEFILE)
+            copy_asset_file(os.path.join(template_dir, 'Makefile'), fn)
         except (IOError, OSError) as err:
             logger.warning(__("error writing file %s: %s"), fn, err)
         logger.info(__(' done'))

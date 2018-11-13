@@ -20,15 +20,14 @@
     :license: BSD, see LICENSE for details.
 """
 
-from typing import TYPE_CHECKING
-
 from docutils import nodes
-from docutils.parsers.rst import Directive
 
 import sphinx
+from sphinx.util.docutils import SphinxDirective
 from sphinx.util.nodes import set_source_info
 
-if TYPE_CHECKING:
+if False:
+    # For type annotation
     from typing import Any, Dict, List  # NOQA
     from sphinx.application import Sphinx  # NOQA
 
@@ -37,7 +36,7 @@ class ifconfig(nodes.Element):
     pass
 
 
-class IfConfig(Directive):
+class IfConfig(SphinxDirective):
 
     has_content = True
     required_arguments = 1
@@ -58,7 +57,7 @@ class IfConfig(Directive):
 
 def process_ifconfig_nodes(app, doctree, docname):
     # type: (Sphinx, nodes.Node, unicode) -> None
-    ns = dict((confval.name, confval.value) for confval in app.config)  # type: ignore
+    ns = dict((confval.name, confval.value) for confval in app.config)
     ns.update(app.config.__dict__.copy())
     ns['builder'] = app.builder.name
     for node in doctree.traverse(ifconfig):

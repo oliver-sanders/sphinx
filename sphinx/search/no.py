@@ -9,13 +9,12 @@
     :license: BSD, see LICENSE for details.
 """
 
-from typing import TYPE_CHECKING
-
 from sphinx.search import SearchLanguage, parse_stop_word
 
 import snowballstemmer
 
-if TYPE_CHECKING:
+if False:
+    # For type annotation
     from typing import Any  # NOQA
 
 
@@ -218,4 +217,4 @@ class SearchNorwegian(SearchLanguage):
 
     def stem(self, word):
         # type: (unicode) -> unicode
-        return self.stemmer.stemWord(word)
+        return self.stemmer.stemWord(word.lower())
